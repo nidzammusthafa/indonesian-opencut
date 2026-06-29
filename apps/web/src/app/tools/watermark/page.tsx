@@ -497,6 +497,80 @@ export default function WatermarkPage() {
 		document.addEventListener("pointerup", handlePointerUp);
 	};
 
+	const handleResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+		e.preventDefault();
+		e.stopPropagation();
+
+		const rect = previewContainerRef.current?.getBoundingClientRect();
+		if (!rect) return;
+
+		if (!e.target || !(e.target instanceof HTMLElement)) return;
+		const targetElement = e.target.closest(".watermark-box");
+		if (!targetElement) return;
+
+		const initialWidth = targetElement.getBoundingClientRect().width;
+		const initialPointerX = e.clientX;
+
+		const initialFontSize = fontSize;
+		const initialLogoSize = logoSize;
+
+		const handlePointerMove = (moveEvent: PointerEvent) => {
+			const deltaX = moveEvent.clientX - initialPointerX;
+			const ratio = Math.max(0.1, (initialWidth + deltaX) / initialWidth);
+
+			if (watermarkType === "text") {
+				setFontSize(Math.max(8, Math.min(200, Math.round(initialFontSize * ratio))));
+			} else {
+				setLogoSize(Math.max(2, Math.min(90, parseFloat((initialLogoSize * ratio).toFixed(1)))));
+			}
+		};
+
+		const handlePointerUp = () => {
+			document.removeEventListener("pointermove", handlePointerMove);
+			document.removeEventListener("pointerup", handlePointerUp);
+		};
+
+		document.addEventListener("pointermove", handlePointerMove);
+		document.addEventListener("pointerup", handlePointerUp);
+	};
+
+	const handleResizePointerDown2 = (e: React.PointerEvent<HTMLDivElement>) => {
+		e.preventDefault();
+		e.stopPropagation();
+
+		const rect = previewContainerRef.current?.getBoundingClientRect();
+		if (!rect) return;
+
+		if (!e.target || !(e.target instanceof HTMLElement)) return;
+		const targetElement = e.target.closest(".watermark-box-2");
+		if (!targetElement) return;
+
+		const initialWidth = targetElement.getBoundingClientRect().width;
+		const initialPointerX = e.clientX;
+
+		const initialFontSize = fontSize;
+		const initialLogoSize = logoSize;
+
+		const handlePointerMove = (moveEvent: PointerEvent) => {
+			const deltaX = moveEvent.clientX - initialPointerX;
+			const ratio = Math.max(0.1, (initialWidth + deltaX) / initialWidth);
+
+			if (watermarkType2 === "text") {
+				setFontSize(Math.max(8, Math.min(200, Math.round(initialFontSize * ratio))));
+			} else {
+				setLogoSize(Math.max(2, Math.min(90, parseFloat((initialLogoSize * ratio).toFixed(1)))));
+			}
+		};
+
+		const handlePointerUp = () => {
+			document.removeEventListener("pointermove", handlePointerMove);
+			document.removeEventListener("pointerup", handlePointerUp);
+		};
+
+		document.addEventListener("pointermove", handlePointerMove);
+		document.addEventListener("pointerup", handlePointerUp);
+	};
+
 	const startBatchProcess = async () => {
 		if (queue.length === 0) return;
 		setErrorMessage(null);
@@ -834,12 +908,12 @@ export default function WatermarkPage() {
 
 										{/* Interactive Overlay Layer 1 */}
 										<div
-											className="absolute transition-transform pointer-events-auto select-none cursor-move z-10"
+											className="absolute pointer-events-auto select-none cursor-move z-10 watermark-box group/wm border border-transparent hover:border-blue-500/50 hover:bg-blue-500/5 rounded p-1"
 											onPointerDown={handlePointerDown}
 											style={{
 												left: `${xPercent}%`,
 												top: `${yPercent}%`,
-												transform: `translate(-${xPercent}%, -${yPercent}%)`,
+												transform: "translate(-50%, -50%)",
 											}}
 										>
 											{watermarkType === "text" ? (
@@ -888,17 +962,23 @@ export default function WatermarkPage() {
 													Belum ada logo
 												</div>
 											)}
+
+											{/* Resize Handle */}
+											<div
+												onPointerDown={handleResizePointerDown}
+												className="resize-handle absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 border border-white cursor-se-resize rounded-full translate-x-1/2 translate-y-1/2 opacity-0 group-hover/wm:opacity-100 transition-opacity"
+											/>
 										</div>
 
 										{/* Interactive Overlay Layer 2 (Dual) */}
 										{isDual && (
 											<div
-												className="absolute transition-transform pointer-events-auto select-none cursor-move z-10"
+												className="absolute pointer-events-auto select-none cursor-move z-10 watermark-box-2 group/wm2 border border-transparent hover:border-indigo-500/50 hover:bg-indigo-500/5 rounded p-1"
 												onPointerDown={handlePointerDown2}
 												style={{
 													left: `${xPercent2}%`,
 													top: `${yPercent2}%`,
-													transform: `translate(-${xPercent2}%, -${yPercent2}%)`,
+													transform: "translate(-50%, -50%)",
 												}}
 											>
 												{watermarkType2 === "text" ? (
@@ -943,6 +1023,12 @@ export default function WatermarkPage() {
 														Belum ada logo 2
 													</div>
 												)}
+
+												{/* Resize Handle */}
+												<div
+													onPointerDown={handleResizePointerDown2}
+													className="resize-handle absolute bottom-0 right-0 w-2.5 h-2.5 bg-indigo-500 border border-white cursor-se-resize rounded-full translate-x-1/2 translate-y-1/2 opacity-0 group-hover/wm2:opacity-100 transition-opacity"
+												/>
 											</div>
 										)}
 
@@ -1054,8 +1140,8 @@ export default function WatermarkPage() {
 												<Slider
 													value={[fontSize]}
 													onValueChange={(val) => setFontSize(val[0])}
-													min={12}
-													max={96}
+													min={8}
+													max={200}
 													step={1}
 												/>
 											</div>
@@ -1152,8 +1238,8 @@ export default function WatermarkPage() {
 												<Slider
 													value={[logoSize]}
 													onValueChange={(val) => setLogoSize(val[0])}
-													min={5}
-													max={60}
+													min={2}
+													max={90}
 													step={1}
 												/>
 											</div>

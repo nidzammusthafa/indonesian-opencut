@@ -52,6 +52,29 @@ const getVideoMetadata = (file: File): Promise<{ width: number; height: number }
 	});
 };
 
+const getClosestAspectRatio = ({ width, height }: { width: number; height: number }): "16:9" | "9:16" | "1:1" | "4:3" => {
+	const ratio = width / height;
+	const presets = [
+		{ label: "16:9" as const, value: 16 / 9 },
+		{ label: "9:16" as const, value: 9 / 16 },
+		{ label: "1:1" as const, value: 1.0 },
+		{ label: "4:3" as const, value: 4 / 3 },
+	];
+
+	let closest = presets[0];
+	let minDiff = Math.abs(ratio - closest.value);
+
+	for (let i = 1; i < presets.length; i++) {
+		const diff = Math.abs(ratio - presets[i].value);
+		if (diff < minDiff) {
+			minDiff = diff;
+			closest = presets[i];
+		}
+	}
+
+	return closest.label;
+};
+
 export default function RemoveWatermarkPage() {
 	const [queue, setQueue] = useState<VideoQueueItem[]>([]);
 	const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
@@ -73,6 +96,52 @@ export default function RemoveWatermarkPage() {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const previewContainerRef = useRef<HTMLDivElement>(null);
 	const boxRef = useRef<HTMLDivElement>(null);
+
+	const activeVideo = queue.find((v) => v.id === activeVideoId);
+
+	// Load settings from localStorage on mount
+	useEffect(() => {
+		/* eslint-disable react-hooks/set-state-in-effect */
+		const savedX = localStorage.getItem("opencut_remove_watermark_x");
+		const savedY = localStorage.getItem("opencut_remove_watermark_y");
+		const savedW = localStorage.getItem("opencut_remove_watermark_w");
+		const savedH = localStorage.getItem("opencut_remove_watermark_h");
+		const savedAspect = localStorage.getItem("opencut_remove_watermark_aspect");
+
+		if (savedX !== null) setXPercent(parseFloat(savedX));
+		if (savedY !== null) setYPercent(parseFloat(savedY));
+		if (savedW !== null) setWidthPercent(parseFloat(savedW));
+		if (savedH !== null) setHeightPercent(parseFloat(savedH));
+		if (savedAspect === "16:9" || savedAspect === "9:16" || savedAspect === "1:1" || savedAspect === "4:3") {
+			setAspectRatio(savedAspect);
+		}
+		/* eslint-enable react-hooks/set-state-in-effect */
+	}, []);
+
+	// Save coordinates and size to localStorage when they change
+	useEffect(() => {
+		localStorage.setItem("opencut_remove_watermark_x", xPercent.toString());
+		localStorage.setItem("opencut_remove_watermark_y", yPercent.toString());
+		localStorage.setItem("opencut_remove_watermark_w", widthPercent.toString());
+		localStorage.setItem("opencut_remove_watermark_h", heightPercent.toString());
+	}, [xPercent, yPercent, widthPercent, heightPercent]);
+
+	// Save aspect ratio to localStorage when it changes
+	useEffect(() => {
+		localStorage.setItem("opencut_remove_watermark_aspect", aspectRatio);
+	}, [aspectRatio]);
+
+	const activeWidth = activeVideo?.width;
+	const activeHeight = activeVideo?.height;
+
+	// Auto aspect ratio adjustment based on video resolution
+	useEffect(() => {
+		if (activeWidth && activeHeight) {
+			const closest = getClosestAspectRatio({ width: activeWidth, height: activeHeight });
+			// eslint-disable-next-line react-hooks/set-state-in-effect
+			setAspectRatio(closest);
+		}
+	}, [activeWidth, activeHeight]);
 
 	const handleFiles = useCallback(async (files: FileList) => {
 		const newItems: VideoQueueItem[] = [];
@@ -208,8 +277,8 @@ export default function RemoveWatermarkPage() {
 			const percentDeltaY = (deltaY / rect.height) * 100;
 
 			// Calculate new size and keep within limits
-			const newW = Math.max(5, Math.min(50, initialWidthPercent + percentDeltaX * 2));
-			const newH = Math.max(5, Math.min(50, initialHeightPercent + percentDeltaY * 2));
+			const newW = Math.max(0.5, Math.min(50, initialWidthPercent + percentDeltaX * 2));
+			const newH = Math.max(0.5, Math.min(50, initialHeightPercent + percentDeltaY * 2));
 
 			setWidthPercent(newW);
 			setHeightPercent(newH);
@@ -313,8 +382,6 @@ export default function RemoveWatermarkPage() {
 		}
 	};
 
-	const activeVideo = queue.find((v) => v.id === activeVideoId);
-
 	// Aspect ratio class helper
 	const aspectClass = 
 		aspectRatio === "16:9" ? "aspect-video" :
@@ -369,9 +436,14 @@ export default function RemoveWatermarkPage() {
 				{/* Drag & Drop Upload Zone */}
 				{queue.length === 0 ? (
 					<div
-						onDragOver={(e) => e.preventDefault()}
+						onDragOver={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+						}}
 						onDrop={(e) => {
 							e.preventDefault();
+							e.stopPropagation();
+							setIsDragActive(false);
 							if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
 						}}
 						onClick={() => fileInputRef.current?.click()}
@@ -440,7 +512,7 @@ export default function RemoveWatermarkPage() {
 										<div
 											ref={boxRef}
 											onPointerDown={handlePointerDown}
-											className="absolute border-2 border-dashed border-red-500 bg-red-500/25 cursor-move z-10 flex items-center justify-center shadow-lg"
+											className="absolute border-2 border-dashed border-red-500 bg-red-500/10 cursor-move z-10 flex items-center justify-center shadow-lg"
 											style={{
 												left: `${xPercent}%`,
 												top: `${yPercent}%`,
@@ -449,7 +521,7 @@ export default function RemoveWatermarkPage() {
 												transform: "translate(-50%, -50%)",
 											}}
 										>
-											<div className="text-[10px] font-bold bg-red-600 text-white px-2 py-0.5 rounded shadow flex items-center gap-1">
+											<div className="absolute -top-6 left-0 whitespace-nowrap text-[10px] font-bold bg-red-600/90 text-white px-2 py-0.5 rounded shadow flex items-center gap-1 pointer-events-none select-none">
 												<Minimize2 size={10} />
 												Sensor Area
 											</div>
@@ -488,7 +560,7 @@ export default function RemoveWatermarkPage() {
 										<Slider
 											value={[widthPercent]}
 											onValueChange={(val) => setWidthPercent(val[0])}
-											min={5}
+											min={0.5}
 											max={50}
 											step={0.5}
 										/>
@@ -502,7 +574,7 @@ export default function RemoveWatermarkPage() {
 										<Slider
 											value={[heightPercent]}
 											onValueChange={(val) => setHeightPercent(val[0])}
-											min={5}
+											min={0.5}
 											max={50}
 											step={0.5}
 										/>
