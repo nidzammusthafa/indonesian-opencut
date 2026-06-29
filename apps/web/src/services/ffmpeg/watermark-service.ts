@@ -129,7 +129,7 @@ export const addWatermark = async ({
 	options: WatermarkOptions;
 	onProgress: (progress: number) => void;
 }): Promise<string> => {
-	const ffmpeg = await getFFmpeg();
+	const ffmpeg = await getFFmpeg({ forceFresh: true });
 
 	const handleProgress = ({ progress }: { progress: number }) => {
 		onProgress(Math.max(0, Math.min(100, Math.round(progress * 100))));

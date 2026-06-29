@@ -3,7 +3,18 @@ import { toBlobURL } from "@ffmpeg/util";
 
 let ffmpegInstance: FFmpeg | null = null;
 
-export async function getFFmpeg(): Promise<FFmpeg> {
+export async function getFFmpeg({
+	forceFresh = false,
+}: { forceFresh?: boolean } = {}): Promise<FFmpeg> {
+	if (forceFresh && ffmpegInstance) {
+		try {
+			ffmpegInstance.terminate();
+		} catch (error) {
+			console.warn("Gagal menghentikan instance FFmpeg lama:", error);
+		}
+		ffmpegInstance = null;
+	}
+
 	if (ffmpegInstance) return ffmpegInstance;
 
 	const ffmpeg = new FFmpeg();
