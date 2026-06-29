@@ -284,103 +284,105 @@ export function ElementParamsTab({
 				</SectionFields>
 				{isTextElement && (
 					<>
-						<div className="flex gap-2 mt-4 pt-4 border-t border-zinc-800">
-							<button
-								type="button"
-								onClick={handleSaveStyle}
-								className="flex-1 h-8 rounded-md bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-primary/90 transition-colors"
-							>
-								{saveSuccess ? (
-									<>
-										<Check size={12} className="text-green-300" />
-										Style Saved!
-									</>
-								) : (
-									<>
-										<Save size={12} />
-										Save Style
-									</>
-								)}
-							</button>
-							<button
-								type="button"
-								onClick={handleApplyStyle}
-								className="flex-1 h-8 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-100 font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-zinc-800 transition-colors"
-							>
-								{applySuccess ? (
-									<>
-										<Check size={12} className="text-green-500" />
-										Style Applied!
-									</>
-								) : (
-									<>
-										<Download size={12} />
-										Apply Style
-									</>
-								)}
-							</button>
-						</div>
-
-						{/* Custom Text Style Presets */}
-						<div className="mt-6 pt-4 border-t border-zinc-800 flex flex-col gap-3">
-							<div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
-								<LayoutGrid size={13} className="text-zinc-500" />
-								<span>Preset Gaya Teks (Watermark / Template)</span>
-							</div>
-
-							<form onSubmit={handleSaveCustomPreset} className="flex gap-1">
-								<input
-									type="text"
-									placeholder="Nama preset baru..."
-									value={newPresetName}
-									onChange={(e) => setNewPresetName(e.target.value)}
-									className="flex-1 h-8 px-2.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
-								/>
+						{isCaption ? (
+							<div className="flex gap-2 mt-4 pt-4 border-t border-zinc-800">
 								<button
-									type="submit"
-									disabled={!newPresetName.trim()}
-									className="h-8 px-3 rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800 text-zinc-200 font-medium text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
+									type="button"
+									onClick={handleSaveStyle}
+									className="flex-1 h-8 rounded-md bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-primary/90 transition-colors"
 								>
-									<Plus size={12} />
-									Simpan
+									{saveSuccess ? (
+										<>
+											<Check size={12} className="text-green-300" />
+											Style Saved!
+										</>
+									) : (
+										<>
+											<Save size={12} />
+											Save Style
+										</>
+									)}
 								</button>
-							</form>
+								<button
+									type="button"
+									onClick={handleApplyStyle}
+									className="flex-1 h-8 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-100 font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-zinc-800 transition-colors"
+								>
+									{applySuccess ? (
+										<>
+											<Check size={12} className="text-green-500" />
+											Style Applied!
+										</>
+									) : (
+										<>
+											<Download size={12} />
+											Apply Style
+										</>
+									)}
+								</button>
+							</div>
+						) : (
+							/* Custom Text Style Presets */
+							<div className="mt-6 pt-4 border-t border-zinc-800 flex flex-col gap-3">
+								<div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+									<LayoutGrid size={13} className="text-zinc-500" />
+									<span>Preset Gaya Teks (Watermark / Template)</span>
+								</div>
 
-							{customPresets.length > 0 ? (
-								<div className="max-h-36 overflow-y-auto pr-1 flex flex-col gap-1.5 scrollbar-thin">
-									{customPresets.map((preset) => (
-										<div
-											key={preset.id}
-											className="flex items-center justify-between p-2 rounded-md bg-zinc-950/60 border border-zinc-900 hover:border-zinc-800 transition-colors"
-										>
-											<span className="text-xs text-zinc-300 font-medium truncate max-w-[140px]">
-												{preset.name}
-											</span>
-											<div className="flex items-center gap-1">
-												<button
-													type="button"
-													onClick={() => handleApplyCustomPreset(preset)}
-													className="h-6 px-2.5 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 text-[10px] text-zinc-300 font-medium cursor-pointer transition-colors"
-												>
-													Terapkan
-												</button>
-												<button
-													type="button"
-													onClick={() => handleDeleteCustomPreset(preset.id)}
-													className="h-6 w-6 rounded border border-transparent hover:border-red-950/40 hover:bg-red-950/20 text-zinc-500 hover:text-red-400 flex items-center justify-center cursor-pointer transition-colors"
-												>
-													<Trash2 size={12} />
-												</button>
+								<form onSubmit={handleSaveCustomPreset} className="flex gap-1">
+									<input
+										type="text"
+										placeholder="Nama preset baru..."
+										value={newPresetName}
+										onChange={(e) => setNewPresetName(e.target.value)}
+										className="flex-1 h-8 px-2.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
+									/>
+									<button
+										type="submit"
+										disabled={!newPresetName.trim()}
+										className="h-8 px-3 rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800 text-zinc-200 font-medium text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
+									>
+										<Plus size={12} />
+										Simpan
+									</button>
+								</form>
+
+								{customPresets.length > 0 ? (
+									<div className="max-h-36 overflow-y-auto pr-1 flex flex-col gap-1.5 scrollbar-thin">
+										{customPresets.map((preset) => (
+											<div
+												key={preset.id}
+												className="flex items-center justify-between p-2 rounded-md bg-zinc-950/60 border border-zinc-900 hover:border-zinc-800 transition-colors"
+											>
+												<span className="text-xs text-zinc-300 font-medium truncate max-w-[140px]">
+													{preset.name}
+												</span>
+												<div className="flex items-center gap-1">
+													<button
+														type="button"
+														onClick={() => handleApplyCustomPreset(preset)}
+														className="h-6 px-2.5 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 text-[10px] text-zinc-300 font-medium cursor-pointer transition-colors"
+													>
+														Terapkan
+													</button>
+													<button
+														type="button"
+														onClick={() => handleDeleteCustomPreset(preset.id)}
+														className="h-6 w-6 rounded border border-transparent hover:border-red-950/40 hover:bg-red-950/20 text-zinc-500 hover:text-red-400 flex items-center justify-center cursor-pointer transition-colors"
+													>
+														<Trash2 size={12} />
+													</button>
+												</div>
 											</div>
-										</div>
-									))}
-								</div>
-							) : (
-								<div className="py-4 text-center rounded-md border border-dashed border-zinc-800">
-									<p className="text-[11px] text-zinc-500">Belum ada preset kustom yang disimpan.</p>
-								</div>
-							)}
-						</div>
+										))}
+									</div>
+								) : (
+									<div className="py-4 text-center rounded-md border border-dashed border-zinc-800">
+										<p className="text-[11px] text-zinc-500">Belum ada preset kustom yang disimpan.</p>
+									</div>
+								)}
+							</div>
+						)}
 					</>
 				)}
 			</SectionContent>
