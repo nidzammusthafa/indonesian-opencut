@@ -44,7 +44,7 @@ describe("keybinding persistence", () => {
 		if (!decoded) throw new Error("Expected migrated keybindings to decode");
 
 		expect(decoded.isCustomized).toBe(true);
-		expect(decoded.keybindings.get("s")).toBe("split");
+		expect(decoded.keybindings.get("c")).toBe("split");
 		expect(decoded.keybindings.get("ctrl+v")).toBe("paste-copied");
 		expect(decoded.keybindings.get("escape")).toBe("cancel-interaction");
 		expect(warnSpy).not.toHaveBeenCalled();

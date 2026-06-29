@@ -23,6 +23,7 @@ import {
 	DashboardSpeed02Icon,
 } from "@hugeicons/core-free-icons";
 import { ElementParamsTab } from "./components/element-params-tab";
+import { TextAnimationTab } from "./components/text-animation-tab";
 import { ClipEffectsTab, StandaloneEffectTab } from "@/effects/components/effects-tab";
 import { MasksTab } from "@/masks/components/masks-tab";
 import { SpeedTab } from "@/speed/components/speed-tab";
@@ -229,6 +230,21 @@ function buildStandaloneEffectTab({
 	};
 }
 
+function buildTextAnimationTab({
+	element,
+}: {
+	element: TextElement;
+}): PropertiesTabDef {
+	return {
+		id: "animation",
+		label: "Animation",
+		icon: <HugeiconsIcon icon={MagicWand05Icon} size={16} />,
+		content: ({ trackId }) => (
+			<TextAnimationTab element={element} trackId={trackId} />
+		),
+	};
+}
+
 function getTextConfig({
 	element,
 }: {
@@ -238,6 +254,7 @@ function getTextConfig({
 		defaultTab: "text",
 		tabs: [
 			buildTextTab({ element }),
+			buildTextAnimationTab({ element }),
 			buildTransformTab({ element }),
 			buildBlendingTab({ element }),
 		],
