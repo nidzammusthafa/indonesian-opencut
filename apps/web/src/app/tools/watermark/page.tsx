@@ -97,26 +97,6 @@ const formatFileSize = (bytes: number) => {
 const getFileKey = (file: File) =>
 	`${file.name}:${file.size}:${file.lastModified}`;
 
-const SUPPORTED_WATERMARK_FONTS = [
-	"Inter",
-	"Arial",
-	"Georgia",
-	"Courier New",
-	"Impact",
-	"Comic Sans MS",
-	"Times New Roman",
-	"Roboto",
-	"Montserrat",
-	"Oswald",
-	"Poppins",
-	"Playfair Display",
-	"Bebas Neue",
-	"Pacifico",
-	"Lobster",
-	"Kanit",
-	"Open Sans",
-] as const;
-
 export default function WatermarkPage() {
 	const [queue, setQueue] = useState<VideoQueueItem[]>([]);
 	const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
@@ -702,10 +682,6 @@ export default function WatermarkPage() {
 		aspectRatio,
 		activeVideo,
 	});
-	const isSelectedFontSupported = SUPPORTED_WATERMARK_FONTS.some(
-		(font) => font === fontFamily,
-	);
-
 	// Load Google Fonts dynamically for previews
 	useEffect(() => {
 		if (typeof window !== "undefined") {
@@ -931,7 +907,7 @@ export default function WatermarkPage() {
 															fontFamily: fontFamily,
 															fontSize: `${fontSize * scaleFactor}px`,
 															color: fontColor,
-															opacity: logoOpacity / 100,
+															opacity: opacity / 100,
 															fontWeight: "bold",
 															whiteSpace: "nowrap",
 															textShadow:
@@ -954,7 +930,7 @@ export default function WatermarkPage() {
 															style={{
 																width: `${Math.round((activeVideo.width || 1920) * (logoSize / 100) * scaleFactor)}px`,
 																height: "auto",
-																opacity: opacity / 100,
+																opacity: logoOpacity / 100,
 															}}
 														/>
 														<span className="absolute -top-4 left-0 bg-indigo-500 text-[8px] text-white px-1 rounded whitespace-nowrap">
@@ -1064,13 +1040,6 @@ export default function WatermarkPage() {
 													onValueChange={setFontFamily}
 													className="h-9 bg-zinc-950 border-zinc-850 text-xs text-white"
 												/>
-												{!isSelectedFontSupported && (
-													<p className="text-[10px] leading-relaxed text-amber-300/90">
-														Preview memakai font pilihan. Output FFmpeg akan
-														fallback ke Inter karena font ini belum didukung
-														encoder watermark.
-													</p>
-												)}
 											</div>
 
 											<div className="flex flex-col gap-2">

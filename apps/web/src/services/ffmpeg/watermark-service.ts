@@ -1,6 +1,6 @@
 import { getFFmpeg } from "./ffmpeg-service";
-import type { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile } from "@ffmpeg/util";
+import { loadFullFont } from "@/fonts/google-fonts";
+import { SYSTEM_FONTS } from "@/fonts/system-fonts";
 
 export interface WatermarkOptions {
 	type: "text" | "image";
@@ -48,161 +48,76 @@ const getVideoMetadata = (
 	});
 };
 
-function escapeFFmpegText(text: string): string {
-	return text
-		.replace(/\\/g, "\\\\")
-		.replace(/'/g, "'\\\\''")
-		.replace(/:/g, "\\:")
-		.replace(/,/g, "\\,")
-		.replace(/;/g, "\\;")
-		.replace(/%/g, "\\%");
-}
-
-async function prepareWatermarkFont({
-	ffmpeg,
+async function renderTextWatermarkPng({
+	text,
 	fontFamily,
+	fontSize,
+	fontColor,
+	opacity,
+	borderWidth,
+	borderColor,
 }: {
-	ffmpeg: FFmpeg;
+	text: string;
 	fontFamily?: string;
-}): Promise<string> {
-	const font = fontFamily || "Inter";
-	const FONT_MAP: Record<string, { fileName: string; urls: string[] }> = {
-		Inter: {
-			fileName: "Inter-Bold.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter-Bold.ttf",
-				"https://cdn.jsdelivr.net/fontsource/fonts/inter@5.0.15/latin-700-normal.ttf",
-			],
-		},
-		Arial: {
-			fileName: "Arial.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/apache/arimo/static/Arimo-Bold.ttf",
-				"https://cdnjs.cloudflare.com/ajax/libs/liberation-fonts/2.00.1/LiberationSans-Bold.ttf",
-			],
-		},
-		Georgia: {
-			fileName: "Georgia.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/gelasio/static/Gelasio-Bold.ttf",
-			],
-		},
-		"Courier New": {
-			fileName: "CourierNew.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/courierprime/CourierPrime-Bold.ttf",
-			],
-		},
-		Impact: {
-			fileName: "Impact.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf",
-			],
-		},
-		"Comic Sans MS": {
-			fileName: "ComicSansMS.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/comicneue/ComicNeue-Bold.ttf",
-			],
-		},
-		"Times New Roman": {
-			fileName: "TimesNewRoman.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/apache/tinos/static/Tinos-Bold.ttf",
-			],
-		},
-		Roboto: {
-			fileName: "Roboto-Bold.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/apache/roboto/static/Roboto-Bold.ttf",
-			],
-		},
-		Montserrat: {
-			fileName: "Montserrat-Bold.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Bold.ttf",
-			],
-		},
-		Oswald: {
-			fileName: "Oswald-Bold.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/static/Oswald-Bold.ttf",
-			],
-		},
-		Poppins: {
-			fileName: "Poppins-Bold.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf",
-			],
-		},
-		"Playfair Display": {
-			fileName: "PlayfairDisplay-Bold.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/static/PlayfairDisplay-Bold.ttf",
-			],
-		},
-		"Bebas Neue": {
-			fileName: "BebasNeue-Regular.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf",
-			],
-		},
-		Pacifico: {
-			fileName: "Pacifico-Regular.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/pacifico/Pacifico-Regular.ttf",
-			],
-		},
-		Lobster: {
-			fileName: "Lobster-Regular.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/lobster/Lobster-Regular.ttf",
-			],
-		},
-		Kanit: {
-			fileName: "Kanit-Bold.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/kanit/static/Kanit-Bold.ttf",
-			],
-		},
-		"Open Sans": {
-			fileName: "OpenSans-Bold.ttf",
-			urls: [
-				"https://raw.githubusercontent.com/google/fonts/main/ofl/opensans/static/OpenSans-Bold.ttf",
-			],
-		},
-	};
-
-	const config = FONT_MAP[font] || FONT_MAP["Inter"];
+	fontSize?: number;
+	fontColor?: string;
+	opacity?: number;
+	borderWidth?: number;
+	borderColor?: string;
+}): Promise<Uint8Array> {
+	const family = fontFamily || "Inter";
+	const size = fontSize || 24;
+	const strokeWidth = borderWidth || 0;
+	const canvas = document.createElement("canvas");
+	const context = canvas.getContext("2d");
+	if (!context) throw new Error("Canvas 2D context is not available");
 
 	try {
-		const exists = await ffmpeg.readFile(config.fileName);
-		if (exists && exists.length > 1000) {
-			return config.fileName;
+		if (!SYSTEM_FONTS.has(family)) {
+			await loadFullFont({ family, weights: [400, 700] });
 		}
-	} catch (_e) {
-		// Font has not been written to the FFmpeg filesystem yet.
+		await document.fonts.load(`700 ${size}px "${family.replace(/"/g, '\\"')}"`);
+	} catch (error) {
+		console.warn(
+			`Gagal memuat font ${family}, memakai fallback browser:`,
+			error,
+		);
 	}
 
-	for (const url of config.urls) {
-		try {
-			const response = await fetch(url);
-			if (response.ok) {
-				const contentType = response.headers.get("content-type") || "";
-				if (!contentType.includes("text/html")) {
-					const blob = await response.blob();
-					if (blob.size > 1000) {
-						await ffmpeg.writeFile(config.fileName, await fetchFile(blob));
-						return config.fileName;
-					}
-				}
-			}
-		} catch (e) {
-			console.warn(`Gagal memuat font dari ${url}:`, e);
-		}
-	}
+	const font = `700 ${size}px "${family.replace(/"/g, '\\"')}", sans-serif`;
+	context.font = font;
+	context.textBaseline = "alphabetic";
+	context.lineJoin = "round";
 
-	return "Inter-Bold.ttf";
+	const metrics = context.measureText(text);
+	const ascent = metrics.actualBoundingBoxAscent || size * 0.8;
+	const descent = metrics.actualBoundingBoxDescent || size * 0.2;
+	const padding = Math.ceil(Math.max(strokeWidth * 2, size * 0.2, 4));
+	canvas.width = Math.max(1, Math.ceil(metrics.width + padding * 2));
+	canvas.height = Math.max(1, Math.ceil(ascent + descent + padding * 2));
+
+	context.font = font;
+	context.textBaseline = "alphabetic";
+	context.lineJoin = "round";
+	context.globalAlpha = Math.max(0, Math.min(1, (opacity ?? 60) / 100));
+	const x = padding;
+	const y = padding + ascent;
+	if (strokeWidth > 0) {
+		context.lineWidth = strokeWidth * 2;
+		context.strokeStyle = borderColor || "#000000";
+		context.strokeText(text, x, y);
+	}
+	context.fillStyle = fontColor || "#ffffff";
+	context.fillText(text, x, y);
+
+	const blob = await new Promise<Blob>((resolve, reject) => {
+		canvas.toBlob((result) => {
+			if (result) resolve(result);
+			else reject(new Error("Failed to render text watermark image"));
+		}, "image/png");
+	});
+
+	return new Uint8Array(await blob.arrayBuffer());
 }
 
 export const addWatermark = async ({
@@ -230,32 +145,68 @@ export const addWatermark = async ({
 
 	await ffmpeg.writeFile(inputName, new Uint8Array(buffer));
 
-	const fontFileName = await prepareWatermarkFont({
-		ffmpeg,
-		fontFamily: options.fontFamily,
-	});
-	const virtualFontPath = fontFileName.startsWith("/")
-		? fontFileName
-		: `/${fontFileName}`;
-
-	let imageName1 = "";
-	let imageName2 = "";
+	const tempInputNames: string[] = [];
+	let watermarkInputIndex1: number | null = null;
+	let watermarkInputIndex2: number | null = null;
 	const execArgs: string[] = ["-y", "-i", inputName];
+	let nextInputIndex = 1;
 
 	try {
 		// Determine which inputs to add
-		if (options.type === "image" && options.imageFile) {
-			imageName1 = `wm_logo1_${Date.now()}_${options.imageFile.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
+		if (options.type === "text") {
+			const textPngName = `wm_text1_${Date.now()}.png`;
+			const textPng = await renderTextWatermarkPng({
+				text: options.text || "My Watermark",
+				fontSize: options.fontSize,
+				fontFamily: options.fontFamily,
+				fontColor: options.fontColor,
+				opacity: options.opacity,
+				borderWidth: options.borderWidth,
+				borderColor: options.borderColor,
+			});
+			await ffmpeg.writeFile(textPngName, textPng);
+			execArgs.push("-i", textPngName);
+			tempInputNames.push(textPngName);
+			watermarkInputIndex1 = nextInputIndex;
+			nextInputIndex += 1;
+		} else if (options.type === "image" && options.imageFile) {
+			const imageName1 = `wm_logo1_${Date.now()}_${options.imageFile.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
 			const imgBuffer = await options.imageFile.arrayBuffer();
 			await ffmpeg.writeFile(imageName1, new Uint8Array(imgBuffer));
 			execArgs.push("-i", imageName1);
+			tempInputNames.push(imageName1);
+			watermarkInputIndex1 = nextInputIndex;
+			nextInputIndex += 1;
 		}
 
-		if (options.isDual && options.type2 === "image" && options.imageFile2) {
-			imageName2 = `wm_logo2_${Date.now()}_${options.imageFile2.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
+		if (options.isDual && options.type2 === "text") {
+			const textPngName2 = `wm_text2_${Date.now()}.png`;
+			const textPng2 = await renderTextWatermarkPng({
+				text: options.text2 || "My Watermark",
+				fontSize: options.fontSize,
+				fontFamily: options.fontFamily,
+				fontColor: options.fontColor,
+				opacity: options.opacity,
+				borderWidth: options.borderWidth,
+				borderColor: options.borderColor,
+			});
+			await ffmpeg.writeFile(textPngName2, textPng2);
+			execArgs.push("-i", textPngName2);
+			tempInputNames.push(textPngName2);
+			watermarkInputIndex2 = nextInputIndex;
+			nextInputIndex += 1;
+		} else if (
+			options.isDual &&
+			options.type2 === "image" &&
+			options.imageFile2
+		) {
+			const imageName2 = `wm_logo2_${Date.now()}_${options.imageFile2.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
 			const imgBuffer = await options.imageFile2.arrayBuffer();
 			await ffmpeg.writeFile(imageName2, new Uint8Array(imgBuffer));
 			execArgs.push("-i", imageName2);
+			tempInputNames.push(imageName2);
+			watermarkInputIndex2 = nextInputIndex;
+			nextInputIndex += 1;
 		}
 
 		// Build filter graph
@@ -264,29 +215,18 @@ export const addWatermark = async ({
 
 		// Watermark 1 (First 50% duration)
 		const enableTime1 = options.isDual ? `:enable='lt(t,${halfDuration})'` : "";
-		if (options.type === "text") {
-			const cleanText = options.text || "My Watermark";
-			const escapedText = escapeFFmpegText(cleanText);
-			const fSize = options.fontSize || 24;
-			const op = ((options.opacity ?? 60) / 100).toFixed(2);
-			const fontColorHex = (options.fontColor || "#ffffff").replace("#", "0x");
+		if (options.type === "text" && watermarkInputIndex1 !== null) {
 			const xFactor = (options.xPercent / 100).toFixed(3);
 			const yFactor = (options.yPercent / 100).toFixed(3);
-
-			let borderParams = "";
-			if (options.borderWidth && options.borderWidth > 0) {
-				const borderW = options.borderWidth;
-				const borderColorHex = (options.borderColor || "#000000").replace(
-					"#",
-					"0x",
-				);
-				borderParams = `:borderw=${borderW}:bordercolor=${borderColorHex}@1.0`;
-			}
-
 			const nextOut = `[v_wm1]`;
-			filterComplex += `${lastOut}drawtext=fontfile=${virtualFontPath}:text='${escapedText}':fontsize=${fSize}:fontcolor=${fontColorHex}@${op}${borderParams}:x=(w-text_w)*${xFactor}:y=(h-text_h)*${yFactor}${enableTime1}${nextOut}; `;
+			filterComplex += `[${watermarkInputIndex1}:v]format=rgba[wm1_rendered]; `;
+			filterComplex += `${lastOut}[wm1_rendered]overlay=x=(W-w)*${xFactor}:y=(H-h)*${yFactor}${enableTime1}${nextOut}; `;
 			lastOut = nextOut;
-		} else if (options.type === "image" && options.imageFile) {
+		} else if (
+			options.type === "image" &&
+			options.imageFile &&
+			watermarkInputIndex1 !== null
+		) {
 			const imageSize = options.imageSize || 15;
 			const targetLogoWidth = Math.round(vw * (imageSize / 100));
 			const op = (
@@ -296,8 +236,7 @@ export const addWatermark = async ({
 			const yFactor = (options.yPercent / 100).toFixed(3);
 
 			const nextOut = `[v_wm1]`;
-			// Logo 1 is at input index 1
-			filterComplex += `[1:v]scale=w=${targetLogoWidth}:h=-1,format=rgba,colorchannelmixer=aa=${op}[wm1_scaled]; `;
+			filterComplex += `[${watermarkInputIndex1}:v]scale=w=${targetLogoWidth}:h=-1,format=rgba,colorchannelmixer=aa=${op}[wm1_scaled]; `;
 			filterComplex += `${lastOut}[wm1_scaled]overlay=x=(W-w)*${xFactor}:y=(H-h)*${yFactor}${enableTime1}${nextOut}; `;
 			lastOut = nextOut;
 		}
@@ -309,32 +248,18 @@ export const addWatermark = async ({
 			const xPercent2 = options.xPercent2 ?? 50;
 			const yPercent2 = options.yPercent2 ?? 50;
 
-			if (type2 === "text") {
-				const cleanText = options.text2 || "My Watermark";
-				const escapedText = escapeFFmpegText(cleanText);
-				const fSize = options.fontSize || 24;
-				const op = ((options.opacity ?? 60) / 100).toFixed(2);
-				const fontColorHex = (options.fontColor || "#ffffff").replace(
-					"#",
-					"0x",
-				);
+			if (type2 === "text" && watermarkInputIndex2 !== null) {
 				const xFactor = (xPercent2 / 100).toFixed(3);
 				const yFactor = (yPercent2 / 100).toFixed(3);
-
-				let borderParams = "";
-				if (options.borderWidth && options.borderWidth > 0) {
-					const borderW = options.borderWidth;
-					const borderColorHex = (options.borderColor || "#000000").replace(
-						"#",
-						"0x",
-					);
-					borderParams = `:borderw=${borderW}:bordercolor=${borderColorHex}@1.0`;
-				}
-
 				const nextOut = `[v_wm2]`;
-				filterComplex += `${lastOut}drawtext=fontfile=${virtualFontPath}:text='${escapedText}':fontsize=${fSize}:fontcolor=${fontColorHex}@${op}${borderParams}:x=(w-text_w)*${xFactor}:y=(h-text_h)*${yFactor}${enableTime2}${nextOut}; `;
+				filterComplex += `[${watermarkInputIndex2}:v]format=rgba[wm2_rendered]; `;
+				filterComplex += `${lastOut}[wm2_rendered]overlay=x=(W-w)*${xFactor}:y=(H-h)*${yFactor}${enableTime2}${nextOut}; `;
 				lastOut = nextOut;
-			} else if (type2 === "image" && options.imageFile2) {
+			} else if (
+				type2 === "image" &&
+				options.imageFile2 &&
+				watermarkInputIndex2 !== null
+			) {
 				const imageSize = options.imageSize || 15;
 				const targetLogoWidth = Math.round(vw * (imageSize / 100));
 				const op = (
@@ -344,9 +269,7 @@ export const addWatermark = async ({
 				const yFactor = (yPercent2 / 100).toFixed(3);
 
 				const nextOut = `[v_wm2]`;
-				// Logo 2 index depends on whether Logo 1 was also an image. If Logo 1 was image, Logo 2 is input 2. Otherwise input 1.
-				const logo2InputIndex = options.type === "image" ? 2 : 1;
-				filterComplex += `[${logo2InputIndex}:v]scale=w=${targetLogoWidth}:h=-1,format=rgba,colorchannelmixer=aa=${op}[wm2_scaled]; `;
+				filterComplex += `[${watermarkInputIndex2}:v]scale=w=${targetLogoWidth}:h=-1,format=rgba,colorchannelmixer=aa=${op}[wm2_scaled]; `;
 				filterComplex += `${lastOut}[wm2_scaled]overlay=x=(W-w)*${xFactor}:y=(H-h)*${yFactor}${enableTime2}${nextOut}; `;
 				lastOut = nextOut;
 			}
@@ -409,16 +332,9 @@ export const addWatermark = async ({
 		} catch (_e) {
 			// Best-effort cleanup.
 		}
-		if (imageName1) {
+		for (const tempInputName of tempInputNames) {
 			try {
-				await ffmpeg.deleteFile(imageName1);
-			} catch (_e) {
-				// Best-effort cleanup.
-			}
-		}
-		if (imageName2) {
-			try {
-				await ffmpeg.deleteFile(imageName2);
+				await ffmpeg.deleteFile(tempInputName);
 			} catch (_e) {
 				// Best-effort cleanup.
 			}
