@@ -1,6 +1,7 @@
 "use client";
 
 import { resolveAnimationPathValueAtTime } from "@/animation";
+import { applyTextAnimations } from "@/text-animation/apply";
 import { Section, SectionContent, SectionFields } from "@/components/section";
 import { useElementPlayhead } from "@/components/editor/panels/properties/hooks/use-element-playhead";
 import { useKeyframedParamProperty } from "@/components/editor/panels/properties/hooks/use-keyframed-param-property";
@@ -120,6 +121,10 @@ export function ElementParamsTab({
 			"transform.rotate",
 			"opacity",
 			"blendMode",
+			"animation.in",
+			"animation.in.duration",
+			"animation.out",
+			"animation.out.duration",
 		];
 
 		const savedStyle: ParamValues = {};
@@ -127,6 +132,11 @@ export function ElementParamsTab({
 			const param = allParams.find((p) => p.key === key);
 			if (param) {
 				savedStyle[key] = allBaseValues[key] ?? param.default;
+			} else if (key.startsWith("animation.")) {
+				const val = element.params[key];
+				if (val !== undefined) {
+					savedStyle[key] = val;
+				}
 			}
 		}
 
@@ -159,13 +169,43 @@ export function ElementParamsTab({
 		}
 
 		const command = new UpdateElementsCommand({
-			updates: elementIds.map((id) => ({
-				elementId: id,
-				trackId,
-				patch: {
-					params: preset.values,
-				},
-			})),
+			updates: elementIds.map((id) => {
+				const valIn = preset.values["animation.in"];
+				const presetInId = typeof valIn === "string" ? valIn : "none";
+				const durationIn = typeof preset.values["animation.in.duration"] === "number"
+					? preset.values["animation.in.duration"]
+					: 0.4;
+				const valOut = preset.values["animation.out"];
+				const presetOutId = typeof valOut === "string" ? valOut : "none";
+				const durationOut = typeof preset.values["animation.out.duration"] === "number"
+					? preset.values["animation.out.duration"]
+					: 0.3;
+
+				const tempElement = {
+					...element,
+					params: {
+						...element.params,
+						...preset.values,
+					},
+				};
+
+				const nextAnimations = applyTextAnimations({
+					element: tempElement,
+					presetInId: presetInId === "none" ? null : presetInId,
+					durationIn,
+					presetOutId: presetOutId === "none" ? null : presetOutId,
+					durationOut,
+				});
+
+				return {
+					elementId: id,
+					trackId,
+					patch: {
+						params: preset.values,
+						animations: nextAnimations,
+					},
+				};
+			}),
 		});
 		editor.command.execute({ command });
 	};
