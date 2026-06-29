@@ -16,10 +16,19 @@ import type { TimelineElement } from "@/timeline";
 import type { MediaTime } from "@/wasm";
 import { useEditor } from "@/editor/use-editor";
 import { useCaptionGlobalSync } from "@/subtitles/hooks/use-caption-global-sync";
-import { useState } from "react";
-import { Save, Check, Download } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Save, Check, Download, Plus, Trash2, LayoutGrid } from "lucide-react";
+import type { TextStylePreset } from "@/text/types";
 import { UpdateElementsCommand } from "@/commands";
 import { useCaptionGlobalModeStore } from "@/subtitles/stores/caption-global-mode-store";
+
+function generatePresetId(): string {
+	return `preset_${Date.now()}`;
+}
+
+function getTimestamp(): number {
+	return Date.now();
+}
 
 export function ElementParamsTab({
 	element,
@@ -48,8 +57,120 @@ export function ElementParamsTab({
 
 	const isTextElement = element.type === "text";
 	const isCaptionGlobalMode = useCaptionGlobalModeStore((s) => s.isGlobalMode);
+	const [customPresets, setCustomPresets] = useState<TextStylePreset[]>([]);
+	const [newPresetName, setNewPresetName] = useState("");
 	const [saveSuccess, setSaveSuccess] = useState(false);
 	const [applySuccess, setApplySuccess] = useState(false);
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		const saved = localStorage.getItem("custom-text-style-presets");
+		if (saved) {
+			try {
+				const parsed = JSON.parse(saved);
+				if (Array.isArray(parsed)) {
+					setTimeout(() => {
+						setCustomPresets(parsed);
+					}, 0);
+				}
+			} catch (e) {
+				console.error("Gagal memuat preset gaya teks kustom:", e);
+			}
+		}
+	}, []);
+
+	const handleSaveCustomPreset = (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!newPresetName.trim()) return;
+
+		const styleParams = [
+			"fontFamily",
+			"fontSize",
+			"color",
+			"textAlign",
+			"fontWeight",
+			"fontStyle",
+			"textDecoration",
+			"letterSpacing",
+			"lineHeight",
+			"background.enabled",
+			"background.color",
+			"background.opacity",
+			"background.cornerRadius",
+			"background.paddingX",
+			"background.paddingY",
+			"background.offsetX",
+			"background.offsetY",
+			"stroke.enabled",
+			"stroke.color",
+			"stroke.width",
+			"highlight.enabled",
+			"highlight.color",
+			"highlight.borderColor",
+			"highlight.borderWidth",
+			"highlight.fontSize",
+			"transform.positionX",
+			"transform.positionY",
+			"transform.scaleX",
+			"transform.scaleY",
+			"transform.rotate",
+			"opacity",
+			"blendMode",
+		];
+
+		const savedStyle: ParamValues = {};
+		for (const key of styleParams) {
+			const param = allParams.find((p) => p.key === key);
+			if (param) {
+				savedStyle[key] = allBaseValues[key] ?? param.default;
+			}
+		}
+
+		const newPreset: TextStylePreset = {
+			id: generatePresetId(),
+			name: newPresetName.trim(),
+			values: savedStyle,
+			createdAt: getTimestamp(),
+		};
+
+		const updated = [...customPresets, newPreset];
+		setCustomPresets(updated);
+		localStorage.setItem("custom-text-style-presets", JSON.stringify(updated));
+		setNewPresetName("");
+	};
+
+	const handleApplyCustomPreset = (preset: TextStylePreset) => {
+		const elementIds = [element.id];
+		if (isCaptionGlobalMode) {
+			const activeScene = editor.scenes.getActiveScene();
+			const track = activeScene.tracks.overlay.find((t) => t.id === trackId);
+			if (track) {
+				for (const el of track.elements) {
+					if (el.id !== element.id) {
+						elementIds.push(el.id);
+					}
+				}
+			}
+		}
+
+		const command = new UpdateElementsCommand({
+			updates: elementIds.map((id) => ({
+				elementId: id,
+				trackId,
+				patch: {
+					params: preset.values,
+				},
+			})),
+		});
+		editor.command.execute({ command });
+	};
+
+	const handleDeleteCustomPreset = (id: string) => {
+		const updated = customPresets.filter((p) => p.id !== id);
+		setCustomPresets(updated);
+		localStorage.setItem("custom-text-style-presets", JSON.stringify(updated));
+	};
+
 	const handleSaveStyle = () => {
 		const styleParams = [
 			"fontFamily",
@@ -158,42 +279,105 @@ export function ElementParamsTab({
 						))}
 				</SectionFields>
 				{isTextElement && (
-					<div className="flex gap-2 mt-4 pt-4 border-t border-zinc-800">
-						<button
-							type="button"
-							onClick={handleSaveStyle}
-							className="flex-1 h-8 rounded-md bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-primary/90 transition-colors"
-						>
-							{saveSuccess ? (
-								<>
-									<Check size={12} className="text-green-300" />
-									Style Saved!
-								</>
+					<>
+						<div className="flex gap-2 mt-4 pt-4 border-t border-zinc-800">
+							<button
+								type="button"
+								onClick={handleSaveStyle}
+								className="flex-1 h-8 rounded-md bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-primary/90 transition-colors"
+							>
+								{saveSuccess ? (
+									<>
+										<Check size={12} className="text-green-300" />
+										Style Saved!
+									</>
+								) : (
+									<>
+										<Save size={12} />
+										Save Style
+									</>
+								)}
+							</button>
+							<button
+								type="button"
+								onClick={handleApplyStyle}
+								className="flex-1 h-8 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-100 font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-zinc-800 transition-colors"
+							>
+								{applySuccess ? (
+									<>
+										<Check size={12} className="text-green-500" />
+										Style Applied!
+									</>
+								) : (
+									<>
+										<Download size={12} />
+										Apply Style
+									</>
+								)}
+							</button>
+						</div>
+
+						{/* Custom Text Style Presets */}
+						<div className="mt-6 pt-4 border-t border-zinc-800 flex flex-col gap-3">
+							<div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+								<LayoutGrid size={13} className="text-zinc-500" />
+								<span>Preset Gaya Teks (Watermark / Template)</span>
+							</div>
+
+							<form onSubmit={handleSaveCustomPreset} className="flex gap-1">
+								<input
+									type="text"
+									placeholder="Nama preset baru..."
+									value={newPresetName}
+									onChange={(e) => setNewPresetName(e.target.value)}
+									className="flex-1 h-8 px-2.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
+								/>
+								<button
+									type="submit"
+									disabled={!newPresetName.trim()}
+									className="h-8 px-3 rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800 text-zinc-200 font-medium text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
+								>
+									<Plus size={12} />
+									Simpan
+								</button>
+							</form>
+
+							{customPresets.length > 0 ? (
+								<div className="max-h-36 overflow-y-auto pr-1 flex flex-col gap-1.5 scrollbar-thin">
+									{customPresets.map((preset) => (
+										<div
+											key={preset.id}
+											className="flex items-center justify-between p-2 rounded-md bg-zinc-950/60 border border-zinc-900 hover:border-zinc-800 transition-colors"
+										>
+											<span className="text-xs text-zinc-300 font-medium truncate max-w-[140px]">
+												{preset.name}
+											</span>
+											<div className="flex items-center gap-1">
+												<button
+													type="button"
+													onClick={() => handleApplyCustomPreset(preset)}
+													className="h-6 px-2.5 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 text-[10px] text-zinc-300 font-medium cursor-pointer transition-colors"
+												>
+													Terapkan
+												</button>
+												<button
+													type="button"
+													onClick={() => handleDeleteCustomPreset(preset.id)}
+													className="h-6 w-6 rounded border border-transparent hover:border-red-950/40 hover:bg-red-950/20 text-zinc-500 hover:text-red-400 flex items-center justify-center cursor-pointer transition-colors"
+												>
+													<Trash2 size={12} />
+												</button>
+											</div>
+										</div>
+									))}
+								</div>
 							) : (
-								<>
-									<Save size={12} />
-									Save Style
-								</>
+								<div className="py-4 text-center rounded-md border border-dashed border-zinc-800">
+									<p className="text-[11px] text-zinc-500">Belum ada preset kustom yang disimpan.</p>
+								</div>
 							)}
-						</button>
-						<button
-							type="button"
-							onClick={handleApplyStyle}
-							className="flex-1 h-8 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-100 font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-zinc-800 transition-colors"
-						>
-							{applySuccess ? (
-								<>
-									<Check size={12} className="text-green-500" />
-									Style Applied!
-								</>
-							) : (
-								<>
-									<Download size={12} />
-									Apply Style
-								</>
-							)}
-						</button>
-					</div>
+						</div>
+					</>
 				)}
 			</SectionContent>
 		</Section>
