@@ -8,6 +8,7 @@ import { DEFAULTS } from "@/timeline/defaults";
 import { mediaTimeFromSeconds } from "@/wasm";
 import type { CreateTextElement } from "@/timeline";
 import type { TextBackground } from "@/text/background";
+import type { TextStroke } from "@/text/stroke";
 import type {
 	TextAlign,
 	TextDecoration,
@@ -78,7 +79,28 @@ function wrapSubtitleText({
 		}
 
 		lines.push(currentLine);
-		wrappedParagraphs.push(lines.join("\n"));
+
+		if (lines.length > 2) {
+			// Balanced split: find the split point that makes the two lines as equal in character length as possible.
+			let bestSplit = 1;
+			let minDiff = Infinity;
+
+			for (let i = 1; i < words.length; i++) {
+				const line1 = words.slice(0, i).join(" ");
+				const line2 = words.slice(i).join(" ");
+				const diff = Math.abs(line1.length - line2.length);
+				if (diff < minDiff) {
+					minDiff = diff;
+					bestSplit = i;
+				}
+			}
+
+			const line1 = words.slice(0, bestSplit).join(" ");
+			const line2 = words.slice(bestSplit).join(" ");
+			wrappedParagraphs.push([line1, line2].join("\n"));
+		} else {
+			wrappedParagraphs.push(lines.join("\n"));
+		}
 	}
 
 	return wrappedParagraphs.join("\n");
@@ -138,33 +160,68 @@ function resolveSubtitleStyle({
 	letterSpacing: number;
 	lineHeight: number;
 	background: TextBackground;
+	stroke: TextStroke;
+	highlightColor: string;
+	highlightEnabled: boolean;
+	highlightBorderColor: string;
+	highlightBorderWidth: number;
+	highlightFontSize: number | undefined;
 	placement: NonNullable<SubtitleStyleOverrides["placement"]>;
 } {
+	let savedStyle: any = {};
+	if (typeof window !== "undefined") {
+		const saved = localStorage.getItem("default-caption-style");
+		if (saved) {
+			try {
+				savedStyle = JSON.parse(saved);
+			} catch (e) {
+				// ignore
+			}
+		}
+	}
+
 	const fontSize =
 		style?.fontSizeRatioOfPlayHeight != null
 			? style.fontSizeRatioOfPlayHeight * FONT_SIZE_SCALE_REFERENCE
-			: (style?.fontSize ?? SUBTITLE_FONT_SIZE);
+			: (style?.fontSize ?? savedStyle.fontSize ?? SUBTITLE_FONT_SIZE);
 
 	return {
-		fontFamily: style?.fontFamily ?? "Arial",
+		fontFamily: style?.fontFamily ?? savedStyle.fontFamily ?? "Arial",
 		fontSize,
-		color: style?.color ?? "#ffffff",
-		textAlign: style?.textAlign ?? "center",
-		fontWeight: style?.fontWeight ?? "bold",
-		fontStyle: style?.fontStyle ?? "normal",
-		textDecoration: style?.textDecoration ?? "none",
-		letterSpacing: style?.letterSpacing ?? DEFAULTS.text.letterSpacing,
-		lineHeight: style?.lineHeight ?? DEFAULTS.text.lineHeight,
+		color: style?.color ?? savedStyle.color ?? "#ffffff",
+		textAlign: style?.textAlign ?? savedStyle.textAlign ?? "center",
+		fontWeight: style?.fontWeight ?? savedStyle.fontWeight ?? "bold",
+		fontStyle: style?.fontStyle ?? savedStyle.fontStyle ?? "normal",
+		textDecoration: style?.textDecoration ?? savedStyle.textDecoration ?? "none",
+		letterSpacing: style?.letterSpacing ?? savedStyle.letterSpacing ?? DEFAULTS.text.letterSpacing,
+		lineHeight: style?.lineHeight ?? savedStyle.lineHeight ?? DEFAULTS.text.lineHeight,
 		background: {
 			...DEFAULTS.text.background,
-			enabled: false,
+			enabled: savedStyle["background.enabled"] ?? false,
+			color: savedStyle["background.color"] ?? DEFAULTS.text.background.color,
+			opacity: savedStyle["background.opacity"] ?? DEFAULTS.text.background.opacity,
+			cornerRadius: savedStyle["background.cornerRadius"] ?? DEFAULTS.text.background.cornerRadius,
+			paddingX: savedStyle["background.paddingX"] ?? DEFAULTS.text.background.paddingX,
+			paddingY: savedStyle["background.paddingY"] ?? DEFAULTS.text.background.paddingY,
+			offsetX: savedStyle["background.offsetX"] ?? DEFAULTS.text.background.offsetX,
+			offsetY: savedStyle["background.offsetY"] ?? DEFAULTS.text.background.offsetY,
 			...(style?.background ?? {}),
 		},
+		stroke: style?.stroke ?? {
+			enabled: savedStyle["stroke.enabled"] ?? false,
+			color: savedStyle["stroke.color"] ?? "#000000",
+			width: savedStyle["stroke.width"] ?? 2,
+		},
+		highlightColor: style?.highlightColor ?? savedStyle.highlightColor ?? savedStyle["highlight.color"] ?? "#FACC15",
+		highlightEnabled: style?.highlightEnabled ?? savedStyle.highlightEnabled ?? savedStyle["highlight.enabled"] ?? false,
+		highlightBorderColor: savedStyle["highlight.borderColor"] ?? "#000000",
+		highlightBorderWidth: savedStyle["highlight.borderWidth"] ?? 0,
+		highlightFontSize: savedStyle["highlight.fontSize"] !== undefined ? parseFloat(savedStyle["highlight.fontSize"]) : undefined,
 		placement: {
-			verticalAlign: style?.placement?.verticalAlign ?? "bottom",
-			marginLeftRatio: style?.placement?.marginLeftRatio,
-			marginRightRatio: style?.placement?.marginRightRatio,
-			marginVerticalRatio: style?.placement?.marginVerticalRatio,
+			verticalAlign: style?.placement?.verticalAlign ?? savedStyle.placement?.verticalAlign ?? "bottom",
+			marginLeftRatio: style?.placement?.marginLeftRatio ?? savedStyle.placement?.marginLeftRatio,
+			marginRightRatio: style?.placement?.marginRightRatio ?? savedStyle.placement?.marginRightRatio,
+			marginVerticalRatio: style?.placement?.marginVerticalRatio ?? savedStyle.placement?.marginVerticalRatio,
 		},
 	};
 }
@@ -281,6 +338,7 @@ export function buildSubtitleTextElement({
 	let content = caption.text;
 	let positionX = 0;
 	let positionY = 0;
+	let adjustedFontSize = style.fontSize;
 
 	if (ctx) {
 		ctx.font = fontString;
@@ -290,15 +348,39 @@ export function buildSubtitleTextElement({
 			text: caption.text,
 			maxWidth,
 		});
-		const measurement = measureWrappedTextBlock({
+		
+		let measurement = measureWrappedTextBlock({
 			ctx,
 			content,
 			canvasHeight: canvasSize.height,
 			textAlign: style.textAlign,
 			background: style.background,
-			fontSize: style.fontSize,
+			fontSize: adjustedFontSize,
 			lineHeight: style.lineHeight,
 		});
+
+		// Auto-fit: if the measured text width exceeds the allowed maxWidth,
+		// scale down the font size proportionally to prevent overflow.
+		if (measurement.visualRect.width > maxWidth) {
+			const scale = maxWidth / measurement.visualRect.width;
+			// Scale down the font size, keeping a minimum readable limit of 1
+			adjustedFontSize = Math.max(1, style.fontSize * scale);
+
+			// Re-measure with the new font size
+			const scaledFontSizePx = adjustedFontSize * (canvasSize.height / FONT_SIZE_SCALE_REFERENCE);
+			ctx.font = `${fontStyle} ${fontWeight} ${scaledFontSizePx}px ${fontFamily}, sans-serif`;
+			
+			measurement = measureWrappedTextBlock({
+				ctx,
+				content,
+				canvasHeight: canvasSize.height,
+				textAlign: style.textAlign,
+				background: style.background,
+				fontSize: adjustedFontSize,
+				lineHeight: style.lineHeight,
+			});
+		}
+
 		positionX = resolvePositionX({
 			canvasWidth: canvasSize.width,
 			textAlign: style.textAlign,
@@ -320,7 +402,7 @@ export function buildSubtitleTextElement({
 		params: {
 			...DEFAULTS.text.element.params,
 			content,
-			fontSize: style.fontSize,
+			fontSize: adjustedFontSize,
 			fontFamily: style.fontFamily,
 			color: style.color,
 			textAlign: style.textAlign,
@@ -331,6 +413,7 @@ export function buildSubtitleTextElement({
 			lineHeight: style.lineHeight,
 			"background.enabled": style.background.enabled,
 			"background.color": style.background.color,
+			"background.opacity": style.background.opacity ?? DEFAULTS.text.background.opacity,
 			"background.cornerRadius":
 				style.background.cornerRadius ?? DEFAULTS.text.background.cornerRadius,
 			"background.paddingX":
@@ -341,6 +424,14 @@ export function buildSubtitleTextElement({
 				style.background.offsetX ?? DEFAULTS.text.background.offsetX,
 			"background.offsetY":
 				style.background.offsetY ?? DEFAULTS.text.background.offsetY,
+			"stroke.enabled": style.stroke.enabled,
+			"stroke.color": style.stroke.color,
+			"stroke.width": style.stroke.width,
+			"highlight.enabled": style.highlightEnabled,
+			"highlight.color": style.highlightColor,
+			"highlight.borderColor": style.highlightBorderColor,
+			"highlight.borderWidth": style.highlightBorderWidth,
+			"highlight.fontSize": style.highlightFontSize ?? 1,
 			"transform.positionX": positionX,
 			"transform.positionY": positionY,
 		},

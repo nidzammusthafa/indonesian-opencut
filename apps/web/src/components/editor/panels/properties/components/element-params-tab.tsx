@@ -14,6 +14,12 @@ import {
 } from "@/params/registry";
 import type { TimelineElement } from "@/timeline";
 import type { MediaTime } from "@/wasm";
+import { useEditor } from "@/editor/use-editor";
+import { useCaptionGlobalSync } from "@/subtitles/hooks/use-caption-global-sync";
+import { useState } from "react";
+import { Save, Check, Download } from "lucide-react";
+import { UpdateElementsCommand } from "@/commands";
+import { useCaptionGlobalModeStore } from "@/subtitles/stores/caption-global-mode-store";
 
 export function ElementParamsTab({
 	element,
@@ -26,6 +32,9 @@ export function ElementParamsTab({
 	paramKeys?: readonly string[];
 	sectionKey: string;
 }) {
+	const editor = useEditor();
+	useEditor((e) => e.timeline.getPreviewTracks());
+
 	const { localTime, isPlayheadWithinElementRange } = useElementPlayhead({
 		startTime: element.startTime,
 		duration: element.duration,
@@ -34,6 +43,71 @@ export function ElementParamsTab({
 		(param) => !paramKeys || paramKeys.includes(param.key),
 	);
 	const baseValues = buildValues({ element, params });
+
+	const isTextElement = element.type === "text";
+	const isCaptionGlobalMode = useCaptionGlobalModeStore((s) => s.isGlobalMode);
+	const [saveSuccess, setSaveSuccess] = useState(false);
+	const [applySuccess, setApplySuccess] = useState(false);
+	const handleSaveStyle = () => {
+		const styleParams = [
+			"fontFamily", "fontSize", "color", "textAlign", "fontWeight", "fontStyle", "textDecoration", "letterSpacing", "lineHeight",
+			"background.enabled", "background.color", "background.opacity", "background.cornerRadius", "background.paddingX", "background.paddingY", "background.offsetX", "background.offsetY",
+			"stroke.enabled", "stroke.color", "stroke.width",
+			"highlight.enabled", "highlight.color", "highlight.borderColor", "highlight.borderWidth", "highlight.fontSize"
+		];
+		const savedStyle: Record<string, any> = {};
+		for (const key of styleParams) {
+			const param = params.find(p => p.key === key);
+			if (param) {
+				savedStyle[key] = baseValues[key] ?? param.default;
+			}
+		}
+		localStorage.setItem("default-caption-style", JSON.stringify(savedStyle));
+		
+		setSaveSuccess(true);
+		setTimeout(() => setSaveSuccess(false), 2000);
+	};
+
+	const handleApplyStyle = () => {
+		const saved = localStorage.getItem("default-caption-style");
+		if (!saved) return;
+		try {
+			const savedStyle = JSON.parse(saved);
+			const updates: Record<string, any> = {};
+			for (const [key, value] of Object.entries(savedStyle)) {
+				updates[key] = value;
+			}
+
+			const elementIds = [element.id];
+			if (isCaptionGlobalMode) {
+				const activeScene = editor.scenes.getActiveScene();
+				const track = activeScene.tracks.overlay.find(t => t.id === trackId);
+				if (track) {
+					for (const el of track.elements) {
+						if (el.id !== element.id) {
+							elementIds.push(el.id);
+						}
+					}
+				}
+			}
+
+			const command = new UpdateElementsCommand({
+				updates: elementIds.map(id => ({
+					elementId: id,
+					trackId,
+					patch: {
+						params: updates,
+					},
+				}))
+			});
+			editor.command.execute({ command });
+			
+			setApplySuccess(true);
+			setTimeout(() => setApplySuccess(false), 2000);
+		} catch (e) {
+			// ignore
+		}
+	};
 
 	return (
 		<Section sectionKey={`${element.id}:${sectionKey}`}>
@@ -53,6 +127,44 @@ export function ElementParamsTab({
 							/>
 						))}
 				</SectionFields>
+				{isTextElement && (
+					<div className="flex gap-2 mt-4 pt-4 border-t border-zinc-800">
+						<button
+							type="button"
+							onClick={handleSaveStyle}
+							className="flex-1 h-8 rounded-md bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-primary/90 transition-colors"
+						>
+							{saveSuccess ? (
+								<>
+									<Check size={12} className="text-green-300" />
+									Style Saved!
+								</>
+							) : (
+								<>
+									<Save size={12} />
+									Save Style
+								</>
+							)}
+						</button>
+						<button
+							type="button"
+							onClick={handleApplyStyle}
+							className="flex-1 h-8 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-100 font-medium text-xs flex items-center justify-center gap-1 cursor-pointer hover:bg-zinc-800 transition-colors"
+						>
+							{applySuccess ? (
+								<>
+									<Check size={12} className="text-green-500" />
+									Style Applied!
+								</>
+							) : (
+								<>
+									<Download size={12} />
+									Apply Style
+								</>
+							)}
+						</button>
+					</div>
+				)}
 			</SectionContent>
 		</Section>
 	);
@@ -79,6 +191,15 @@ function ElementParamField({
 		localTime,
 		fallbackValue: baseValue,
 	});
+
+	// Hook untuk sinkronisasi global caption
+	// Hanya aktif jika element adalah text (caption) dan param adalah style param
+	const { expandPreviewToSiblings } = useCaptionGlobalSync({
+		element,
+		trackId,
+		param,
+	});
+
 	const animatedParam = useKeyframedParamProperty({
 		param,
 		trackId,
@@ -92,11 +213,17 @@ function ElementParamField({
 			writeElementParamValue({ element, param, value }),
 	});
 
+	// Wrap onPreview: update caption yang dipilih + semua sibling caption jika global mode aktif
+	const handlePreview = (value: number | string | boolean) => {
+		animatedParam.onPreview(value);
+		expandPreviewToSiblings(value);
+	};
+
 	return (
 		<PropertyParamField
 			param={param}
 			value={resolvedValue}
-			onPreview={animatedParam.onPreview}
+			onPreview={handlePreview}
 			onCommit={animatedParam.onCommit}
 			keyframe={
 				param.keyframable === false

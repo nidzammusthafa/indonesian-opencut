@@ -14,7 +14,7 @@ import { SYSTEM_FONTS } from "@/fonts/system-fonts";
 import type { FontAtlas, FontAtlasEntry } from "@/fonts/types";
 import { useFontAtlas } from "@/fonts/use-font-atlas";
 import { cn } from "@/utils/ui";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, Star } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TextIcon } from "@hugeicons/core-free-icons";
 
@@ -46,14 +46,45 @@ export function FontPicker({
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState("");
 	const [activeTab, setActiveTab] = useState<FontTab>("all");
+	const [favorites, setFavorites] = useState<string[]>([]);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 	const { atlas, status, fontNames, retry: handleRetry } = useFontAtlas({ open });
 
+	// Load favorites on mount
+	useEffect(() => {
+		const saved = localStorage.getItem("favorite-fonts");
+		if (saved) {
+			try {
+				setFavorites(JSON.parse(saved));
+			} catch (e) {
+				// ignore
+			}
+		}
+	}, []);
+
+	const toggleFavorite = useCallback((fontName: string) => {
+		setFavorites((prev) => {
+			const updated = prev.includes(fontName)
+				? prev.filter((name) => name !== fontName)
+				: [...prev, fontName];
+			localStorage.setItem("favorite-fonts", JSON.stringify(updated));
+			return updated;
+		});
+	}, []);
+
 	const filteredFonts = useMemo(() => {
-		if (!search) return fontNames;
+		let baseFonts = fontNames;
+		if (activeTab === "favorites") {
+			baseFonts = fontNames.filter((name) => favorites.includes(name));
+		} else if (activeTab === "my-fonts") {
+			// Placeholder/Fallback for custom uploads
+			baseFonts = [];
+		}
+
+		if (!search) return baseFonts;
 		const query = search.toLowerCase();
-		return fontNames.filter((name) => name.toLowerCase().includes(query));
-	}, [fontNames, search]);
+		return baseFonts.filter((name) => name.toLowerCase().includes(query));
+	}, [fontNames, activeTab, favorites, search]);
 
 	const listHeight = Math.min(
 		MAX_LIST_HEIGHT,
@@ -162,8 +193,10 @@ export function FontPicker({
 				{status === "idle" &&
 					fontNames.length > 0 &&
 					filteredFonts.length === 0 && (
-						<div className="py-6 text-center text-sm text-muted-foreground">
-							No fonts found.
+						<div className="py-8 text-center text-sm text-muted-foreground px-4">
+							{activeTab === "favorites"
+								? "No favorite fonts yet. Click the star icon next to any font to add it."
+								: "No fonts found."}
 						</div>
 					)}
 				{status === "idle" && atlas && filteredFonts.length > 0 && (
@@ -177,6 +210,8 @@ export function FontPicker({
 							filteredFonts,
 							selectedFont: defaultValue,
 							onFontSelect: handleSelect,
+							favorites,
+							onToggleFavorite: toggleFavorite,
 						}}
 						style={{ height: listHeight, width: LIST_WIDTH }}
 					/>
@@ -212,6 +247,8 @@ type FontRowProps = {
 	filteredFonts: string[];
 	selectedFont: string | undefined;
 	onFontSelect: (params: { family: string }) => void;
+	favorites: string[];
+	onToggleFavorite: (fontName: string) => void;
 };
 
 function FontRow({
@@ -221,38 +258,60 @@ function FontRow({
 	filteredFonts,
 	selectedFont,
 	onFontSelect,
+	favorites,
+	onToggleFavorite,
 }: RowComponentProps<FontRowProps>) {
 	const fontName = filteredFonts[index];
 	const entry = atlas.fonts[fontName];
 	const isSelected = fontName === selectedFont;
 	const isSystemFont = SYSTEM_FONTS.has(fontName);
+	const isFavorite = favorites.includes(fontName);
 
 	return (
-		<button
-			type="button"
-			style={style as CSSProperties}
+		<div
+			style={style}
 			className={cn(
-				"flex w-full cursor-pointer items-center gap-2 px-3 outline-hidden hover:bg-popover-hover",
+				"flex w-full items-center justify-between px-3 hover:bg-popover-hover group",
 				isSelected && "bg-popover-hover",
 			)}
-			onClick={() => onFontSelect({ family: fontName })}
-			onKeyDown={(event) => {
-				if (event.key === "Enter" || event.key === " ") {
-					event.preventDefault();
-					onFontSelect({ family: fontName });
-				}
-			}}
-			aria-label={fontName}
 		>
-			<div className="min-w-0 overflow-hidden">
-				{isSystemFont ? (
-					<span className="text-xl text-foreground/85" style={{ fontFamily: fontName }}>
-						{fontName}
-					</span>
-				) : (
-					<FontSpritePreview entry={entry} />
+			<button
+				type="button"
+				className="flex-1 text-left cursor-pointer py-2 outline-hidden min-w-0 overflow-hidden font-picker-row-btn"
+				onClick={() => onFontSelect({ family: fontName })}
+				onKeyDown={(event) => {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						onFontSelect({ family: fontName });
+					}
+				}}
+				aria-label={fontName}
+			>
+				<div className="min-w-0 overflow-hidden">
+					{isSystemFont ? (
+						<span className="text-xl text-foreground/85" style={{ fontFamily: fontName }}>
+							{fontName}
+						</span>
+					) : (
+						<FontSpritePreview entry={entry} />
+					)}
+				</div>
+			</button>
+			<button
+				type="button"
+				className={cn(
+					"p-1 rounded-md text-muted-foreground/60 hover:text-yellow-500 hover:bg-muted/40 cursor-pointer focus:outline-hidden",
+					isFavorite ? "text-yellow-500!" : "opacity-0 group-hover:opacity-100 transition-opacity"
 				)}
-			</div>
-		</button>
+				onClick={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					onToggleFavorite(fontName);
+				}}
+				aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+			>
+				<Star className={cn("size-3.5", isFavorite ? "fill-yellow-500 text-yellow-500" : "")} />
+			</button>
+		</div>
 	);
 }

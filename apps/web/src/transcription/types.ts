@@ -12,6 +12,10 @@ export interface TranscriptionResult {
 	text: string;
 	segments: TranscriptionSegment[];
 	language: string;
+	/** Pre-built caption chunks from word-level timestamps. When present, use
+	 *  these directly instead of calling buildCaptionChunks() to preserve
+	 *  per-word timing accuracy. */
+	captionChunks?: CaptionChunk[];
 }
 
 export type TranscriptionStatus =
@@ -40,8 +44,15 @@ export interface TranscriptionModel {
 	description: string;
 }
 
+export interface WordTiming {
+	word: string;
+	start: number; // in seconds
+	end: number;   // in seconds
+}
+
 export interface CaptionChunk {
 	text: string;
 	startTime: number;
 	duration: number;
+	wordTimings?: WordTiming[];
 }

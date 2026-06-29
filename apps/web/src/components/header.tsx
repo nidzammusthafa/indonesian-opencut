@@ -31,6 +31,14 @@ export function Header() {
 
 	const links = [
 		{
+			label: "Watermark",
+			href: "/tools/watermark",
+		},
+		{
+			label: "Hapus Watermark",
+			href: "/tools/remove-watermark",
+		},
+		{
 			label: "Roadmap",
 			href: "/roadmap",
 		},

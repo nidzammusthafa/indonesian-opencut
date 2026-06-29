@@ -7,6 +7,8 @@ import type {
 } from "@/text/primitives";
 import type { CaptionChunk } from "@/transcription/types";
 
+import type { TextStroke } from "@/text/stroke";
+
 export interface SubtitlePlacementStyle {
 	verticalAlign?: "top" | "middle" | "bottom";
 	marginLeftRatio?: number;
@@ -32,6 +34,9 @@ export interface SubtitleStyleOverrides {
 	color?: string;
 	background?: Pick<TextBackground, "enabled" | "color"> &
 		Partial<Omit<TextBackground, "enabled" | "color">>;
+	stroke?: TextStroke;
+	highlightColor?: string;
+	highlightEnabled?: boolean;
 	textAlign?: TextAlign;
 	fontWeight?: TextFontWeight;
 	fontStyle?: TextFontStyle;

@@ -712,8 +712,61 @@ export class TimelineManager {
 			updates: Partial<TimelineElement>;
 		}[];
 	}): void {
+		let nextUpdates = [...updates];
+
+		try {
+			const { useCaptionGlobalModeStore } = require("../../subtitles/stores/caption-global-mode-store");
+			const isGlobalMode = useCaptionGlobalModeStore.getState().isGlobalMode;
+
+			if (isGlobalMode) {
+				const activeScene = this.editor.scenes.getActiveSceneOrNull();
+				if (activeScene) {
+					const siblingUpdates: {
+						trackId: string;
+						elementId: string;
+						updates: Partial<TimelineElement>;
+					}[] = [];
+					for (const update of updates) {
+						const track = activeScene.tracks.overlay.find(
+							(t) => t.id === update.trackId && t.type === "text",
+						);
+						if (!track) continue;
+
+						const element = track.elements.find((el) => el.id === update.elementId);
+						if (element && element.type === "text") {
+							const siblings = track.elements.filter((el) => el.id !== element.id);
+							for (const sibling of siblings) {
+								const siblingPatch: Partial<TimelineElement> = {};
+								
+								if (update.updates.params) {
+									const paramsPatch = { ...update.updates.params };
+									delete paramsPatch.content;
+									if (Object.keys(paramsPatch).length > 0) {
+										siblingPatch.params = paramsPatch;
+									}
+								}
+
+								if (Object.keys(siblingPatch).length > 0) {
+									siblingUpdates.push({
+										trackId: update.trackId,
+										elementId: sibling.id,
+										updates: siblingPatch,
+									});
+								}
+							}
+						}
+					}
+					if (siblingUpdates.length > 0) {
+						nextUpdates = [...nextUpdates, ...siblingUpdates];
+					}
+				}
+			}
+		} catch (e) {
+			console.error("Global mode preview sync failed:", e);
+		}
+
 		let changedOverlayCount = 0;
-		for (const { elementId, updates: elementUpdates } of updates) {
+		for (const { elementId, updates: elementUpdates } of nextUpdates) {
 			const existingOverlay = this.previewOverlay.get(elementId);
 			const changed = Object.entries(elementUpdates).some(([key, value]) => {
 				return !Object.is(
@@ -781,9 +834,15 @@ export class TimelineManager {
 
 			const nextElements = track.elements.map((element) => {
 				const overlay = this.previewOverlay.get(element.id);
-				return overlay
-					? ({ ...element, ...overlay } as TimelineElement)
-					: element;
+				if (!overlay) return element;
+				return {
+					...element,
+					...overlay,
+					params: {
+						...element.params,
+						...(overlay.params ?? {}),
+					},
+				} as TimelineElement;
 			});
 
 			return { ...track, elements: nextElements } as TTrack;

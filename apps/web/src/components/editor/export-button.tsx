@@ -25,6 +25,7 @@ import {
 	EXPORT_QUALITY_VALUES,
 	type ExportFormat,
 	type ExportQuality,
+	QUALITY_RESOLUTION_MAP,
 } from "@/export";
 import {
 	Section,
@@ -34,6 +35,7 @@ import {
 } from "@/components/section";
 import { useEditor } from "@/editor/use-editor";
 import { DEFAULT_EXPORT_OPTIONS } from "@/export/defaults";
+
 
 function isExportFormat(value: string): value is ExportFormat {
 	return EXPORT_FORMAT_VALUES.some((formatValue) => formatValue === value);
@@ -211,20 +213,38 @@ function ExportPopover({
 											>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="low" id="low" />
-													<Label htmlFor="low">Low - Smallest file size</Label>
+													<Label htmlFor="low">
+														Low
+														<span className="text-muted-foreground ml-1 text-xs">
+															({QUALITY_RESOLUTION_MAP.low.label} · {QUALITY_RESOLUTION_MAP.low.bitrateMbps} Mbps)
+														</span>
+													</Label>
 												</div>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="medium" id="medium" />
-													<Label htmlFor="medium">Medium - Balanced</Label>
+													<Label htmlFor="medium">
+														Medium
+														<span className="text-muted-foreground ml-1 text-xs">
+															({QUALITY_RESOLUTION_MAP.medium.label} · {QUALITY_RESOLUTION_MAP.medium.bitrateMbps} Mbps)
+														</span>
+													</Label>
 												</div>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="high" id="high" />
-													<Label htmlFor="high">High - Recommended</Label>
+													<Label htmlFor="high">
+														High
+														<span className="text-muted-foreground ml-1 text-xs">
+															({QUALITY_RESOLUTION_MAP.high.label} · {QUALITY_RESOLUTION_MAP.high.bitrateMbps} Mbps — Recommended)
+														</span>
+													</Label>
 												</div>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="very_high" id="very_high" />
 													<Label htmlFor="very_high">
-														Very high - Largest file size
+														Very high
+														<span className="text-muted-foreground ml-1 text-xs">
+															({QUALITY_RESOLUTION_MAP.very_high.label} · {QUALITY_RESOLUTION_MAP.very_high.bitrateMbps} Mbps)
+														</span>
 													</Label>
 												</div>
 											</RadioGroup>

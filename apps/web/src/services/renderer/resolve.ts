@@ -17,7 +17,7 @@ import {
 	getTextMeasurementContext,
 	measureTextElement,
 } from "@/text/measure-element";
-import { resolveColorAtTime, resolveOpacityAtTime } from "@/animation/values";
+import { resolveColorAtTime, resolveOpacityAtTime, resolveNumberAtTime } from "@/animation/values";
 import { resolveTransformAtTime } from "@/rendering/animation-values";
 import { videoCache } from "@/services/video-cache/service";
 import type { CanvasRenderer } from "./canvas-renderer";
@@ -333,6 +333,20 @@ function resolveTextNode({
 	});
 	const background = buildTextBackgroundFromElement({ element: node.params });
 
+	const strokeEnabled = node.params.params["stroke.enabled"] === true;
+	const strokeColor = resolveColorAtTime({
+		baseColor: typeof node.params.params["stroke.color"] === "string" ? node.params.params["stroke.color"] : "#000000",
+		animations: node.params.animations,
+		propertyPath: "stroke.color",
+		localTime,
+	});
+	const strokeWidth = resolveNumberAtTime({
+		baseValue: typeof node.params.params["stroke.width"] === "number" ? node.params.params["stroke.width"] : 2,
+		animations: node.params.animations,
+		propertyPath: "stroke.width",
+		localTime,
+	});
+
 	return {
 		transform: resolveTransformAtTime({
 			baseTransform: node.params.transform,
@@ -372,6 +386,28 @@ function resolveTextNode({
 			localTime,
 			ctx: getTextMeasurementContext(),
 		}),
+		stroke: {
+			enabled: strokeEnabled,
+			color: strokeColor,
+			width: strokeWidth,
+		},
+		highlight: {
+			enabled: node.params.params["highlight.enabled"] === true,
+			color: typeof node.params.params["highlight.color"] === "string" ? node.params.params["highlight.color"] : "#FACC15",
+			borderColor: typeof node.params.params["highlight.borderColor"] === "string" ? node.params.params["highlight.borderColor"] : "#000000",
+			borderWidth: typeof node.params.params["highlight.borderWidth"] === "number" ? node.params.params["highlight.borderWidth"] : 0,
+			fontSize: typeof node.params.params["highlight.fontSize"] === "number" ? node.params.params["highlight.fontSize"] : 1,
+			activeWordIndex: (() => {
+				const contentStr = typeof node.params.params.content === "string" ? node.params.params.content : "";
+				const wordsList = contentStr.trim().split(/\s+/).filter(Boolean);
+				if (wordsList.length === 0) return 0;
+				const durationSec = node.params.duration;
+				const timePerWord = durationSec / wordsList.length;
+				const highlightOffset = -0.15; // 150ms anticipation offset
+				const adjustedLocalTime = localTime - highlightOffset;
+				return Math.max(0, Math.floor(adjustedLocalTime / timePerWord));
+			})(),
+		},
 	};
 }
 

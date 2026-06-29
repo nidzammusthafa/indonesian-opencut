@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import type {
 	ParamDefinition,
 	NumberParamDefinition,
@@ -24,6 +25,7 @@ import {
 import { usePropertyDraft } from "../hooks/use-property-draft";
 import { KeyframeToggle } from "./keyframe-toggle";
 import { Textarea } from "@/components/ui/textarea";
+import { FontPicker } from "@/components/ui/font-picker";
 
 export function PropertyParamField({
 	param,
@@ -138,26 +140,55 @@ function ParamInput({
 
 	if (param.type === "text") {
 		return (
-			<Textarea
-				value={String(value)}
-				onChange={(event) => onPreview(event.currentTarget.value)}
-				onBlur={onCommit}
+			<TextParamField
+				value={value}
+				onPreview={(val) => onPreview(val)}
+				onCommit={onCommit}
 			/>
 		);
 	}
 
 	if (param.type === "font") {
 		return (
-			<input
-				className="border-input bg-accent h-9 w-full rounded-md border px-3 text-sm outline-none"
-				value={String(value)}
-				onChange={(event) => onPreview(event.currentTarget.value)}
-				onBlur={onCommit}
+			<FontPicker
+				defaultValue={String(value)}
+				onValueChange={(family) => {
+					onPreview(family);
+					onCommit();
+				}}
 			/>
 		);
 	}
 
 	return null;
+}
+
+function TextParamField({
+	value,
+	onPreview,
+	onCommit,
+}: {
+	value: ParamValue;
+	onPreview: (value: string) => void;
+	onCommit: () => void;
+}) {
+	const [localValue, setLocalValue] = useState(String(value));
+
+	useEffect(() => {
+		setLocalValue(String(value));
+	}, [value]);
+
+	return (
+		<Textarea
+			value={localValue}
+			onChange={(event) => {
+				const newVal = event.currentTarget.value;
+				setLocalValue(newVal);
+				onPreview(newVal);
+			}}
+			onBlur={onCommit}
+		/>
+	);
 }
 
 function NumberParamField({

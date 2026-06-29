@@ -3,7 +3,7 @@ import {
 	type AutomaticSpeechRecognitionPipeline,
 	type AutomaticSpeechRecognitionOutput,
 } from "@huggingface/transformers";
-import type { TranscriptionSegment } from "@/transcription/types";
+import type { TranscriptionSegment, CaptionChunk } from "@/transcription/types";
 import {
 	DEFAULT_CHUNK_LENGTH_SECONDS,
 	DEFAULT_STRIDE_SECONDS,
@@ -23,6 +23,7 @@ export type WorkerResponse =
 			type: "transcribe-complete";
 			text: string;
 			segments: TranscriptionSegment[];
+			captionChunks: CaptionChunk[];
 	  }
 	| { type: "transcribe-error"; error: string }
 	| { type: "cancelled" };
@@ -31,6 +32,65 @@ let transcriber: AutomaticSpeechRecognitionPipeline | null = null;
 let cancelled = false;
 let lastReportedProgress = -1;
 const fileBytes = new Map<string, { loaded: number; total: number }>();
+
+const MAX_WORDS_PER_CHUNK = 5;
+const MAX_CHUNK_DURATION = 2.5;
+const MAX_WORD_GAP = 0.8;
+
+/** Build CaptionChunk[] from word-level timestamps for precise synchronization. */
+function buildChunksFromWords(
+	words: Array<{ word: string; start: number; end: number }>,
+): CaptionChunk[] {
+	const chunks: CaptionChunk[] = [];
+	let currentGroup: Array<{ word: string; start: number; end: number }> = [];
+
+	for (const wordData of words) {
+		const cleanWord = wordData.word.replace(/\s+/g, " ").trim();
+		if (!cleanWord) continue;
+
+		if (currentGroup.length === 0) {
+			currentGroup.push(wordData);
+			continue;
+		}
+
+		const firstWord = currentGroup[0];
+		const prevWord = currentGroup[currentGroup.length - 1];
+		const gap = wordData.start - prevWord.end;
+		const duration = prevWord.end - firstWord.start;
+
+		const shouldSplit =
+			currentGroup.length >= MAX_WORDS_PER_CHUNK ||
+			duration >= MAX_CHUNK_DURATION ||
+			gap > MAX_WORD_GAP ||
+			prevWord.word.trimEnd().endsWith(".") ||
+			prevWord.word.trimEnd().endsWith("?") ||
+			prevWord.word.trimEnd().endsWith("!") ||
+			prevWord.word.trimEnd().endsWith(",");
+
+		if (shouldSplit) {
+			chunks.push({
+				text: currentGroup.map((w) => w.word.trim()).join(" "),
+				startTime: firstWord.start,
+				duration: Math.max(0.1, prevWord.end - firstWord.start),
+			});
+			currentGroup = [wordData];
+		} else {
+			currentGroup.push(wordData);
+		}
+	}
+
+	if (currentGroup.length > 0) {
+		const first = currentGroup[0];
+		const last = currentGroup[currentGroup.length - 1];
+		chunks.push({
+			text: currentGroup.map((w) => w.word.trim()).join(" "),
+			startTime: first.start,
+			duration: Math.max(0.1, last.end - first.start),
+		});
+	}
+
+	return chunks;
+}
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 	const message = event.data;
@@ -138,7 +198,8 @@ async function handleTranscribe({
 			chunk_length_s: DEFAULT_CHUNK_LENGTH_SECONDS,
 			stride_length_s: DEFAULT_STRIDE_SECONDS,
 			language: language === "auto" ? undefined : language,
-			return_timestamps: true,
+			task: "transcribe", // explicitly prevent translation mode
+			return_timestamps: true, // word-level not supported by quantized ONNX models
 		});
 
 		if (cancelled) return;
@@ -161,10 +222,16 @@ async function handleTranscribe({
 			}
 		}
 
+		// Local quantized ONNX models do not support cross-attentions required for
+		// word-level timestamps. captionChunks is left empty so assets-view.tsx
+		// falls back to buildCaptionChunks() with segment-level timing.
+		const captionChunks: CaptionChunk[] = [];
+
 		self.postMessage({
 			type: "transcribe-complete",
 			text: result.text,
 			segments,
+			captionChunks,
 		} satisfies WorkerResponse);
 	} catch (error) {
 		if (cancelled) return;

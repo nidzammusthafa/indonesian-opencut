@@ -21,6 +21,19 @@ export interface ResolvedTextNodeState {
 	backgroundColor: string;
 	effectPasses: EffectPass[][];
 	measuredText: MeasuredTextElement;
+	stroke?: {
+		enabled: boolean;
+		color: string;
+		width: number;
+	} | null;
+	highlight?: {
+		enabled: boolean;
+		color: string;
+		activeWordIndex: number;
+		borderColor?: string;
+		borderWidth?: number;
+		fontSize?: number;
+	} | null;
 }
 
 export class TextNode extends BaseNode<TextNodeParams, ResolvedTextNodeState> {}
@@ -54,6 +67,8 @@ export function renderTextToContext({
 		textColor: resolved.textColor,
 		background: resolved.measuredText.resolvedBackground,
 		backgroundColor: resolved.backgroundColor,
+		stroke: resolved.stroke,
+		highlight: resolved.highlight,
 		textBaseline: baseline,
 	});
 

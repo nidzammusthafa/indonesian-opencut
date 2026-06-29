@@ -2,11 +2,12 @@
 
 import { cn } from "@/utils/ui";
 import { clamp } from "@/utils/math";
-import { useRef, useState, useLayoutEffect, type ComponentProps } from "react";
+import { useRef, useState, useLayoutEffect, useEffect, type ComponentProps } from "react";
 import { useFocusLock } from "@/hooks/use-focus-lock";
 import { Button } from "@/components/ui/button";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowTurnBackwardIcon } from "@hugeicons/core-free-icons";
+import { ChevronUp, ChevronDown } from "lucide-react";
 
 const SUFFIX_GAP_PX = 6;
 
@@ -143,6 +144,44 @@ function NumberField({
 	const [suffixLeft, setSuffixLeft] = useState(0);
 	const ghostValue = Array.isArray(value) ? value.join(", ") : String(value ?? "");
 
+	const adjustNumberValue = (direction: 1 | -1) => {
+		const parsed = parseFloat(String(value ?? "0"));
+		if (Number.isNaN(parsed)) return;
+
+		const stepVal = props.step ? parseFloat(String(props.step)) : 1;
+		const minVal = props.min !== undefined ? parseFloat(String(props.min)) : scrubClamp?.min;
+		const maxVal = props.max !== undefined ? parseFloat(String(props.max)) : scrubClamp?.max;
+
+		let nextValue = parsed + direction * stepVal;
+		if (minVal !== undefined) nextValue = Math.max(minVal, nextValue);
+		if (maxVal !== undefined) nextValue = Math.min(maxVal, nextValue);
+
+		// Format to match step precision
+		const stepStr = String(stepVal);
+		const decimalIndex = stepStr.indexOf(".");
+		if (decimalIndex !== -1) {
+			const precision = stepStr.length - decimalIndex - 1;
+			nextValue = parseFloat(nextValue.toFixed(precision));
+		}
+
+		if (onScrub) {
+			onScrub(nextValue);
+			onScrubEnd?.();
+		} else {
+			if (inputRef.current) {
+				const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+					window.HTMLInputElement.prototype,
+					"value"
+				)?.set;
+				nativeInputValueSetter?.call(inputRef.current, String(nextValue));
+				const event = new Event("input", { bubbles: true });
+				inputRef.current.dispatchEvent(event);
+			}
+		}
+	};
+
+
+
 	useLayoutEffect(() => {
 		if (!suffix) {
 			setSuffixLeft(0);
@@ -232,6 +271,15 @@ function NumberField({
 			onKeyDown={(event) => {
 				const shouldBlurInput = event.key === "Enter" || event.key === "Escape";
 				if (shouldBlurInput) event.currentTarget.blur();
+				
+				if (event.key === "ArrowUp") {
+					event.preventDefault();
+					adjustNumberValue(1);
+				} else if (event.key === "ArrowDown") {
+					event.preventDefault();
+					adjustNumberValue(-1);
+				}
+				
 				onKeyDown?.(event);
 			}}
 			onBlur={(event) => {
@@ -299,6 +347,35 @@ function NumberField({
 					</>
 				)}
 			</span>
+			{/* Small stacked up/down arrow buttons on the right side */}
+			{!disabled && (
+				<div className="flex flex-col border-l border-zinc-800/50 shrink-0 h-full justify-center w-5 select-none">
+					<button
+						type="button"
+						tabIndex={-1}
+						onClick={(e) => {
+							e.stopPropagation();
+							adjustNumberValue(1);
+						}}
+						className="flex-1 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all active:scale-90"
+						style={{ height: "50%" }}
+					>
+						<ChevronUp size={10} strokeWidth={3.5} />
+					</button>
+					<button
+						type="button"
+						tabIndex={-1}
+						onClick={(e) => {
+							e.stopPropagation();
+							adjustNumberValue(-1);
+						}}
+						className="flex-1 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 border-t border-zinc-800/35 transition-all active:scale-90"
+						style={{ height: "50%" }}
+					>
+						<ChevronDown size={10} strokeWidth={3.5} />
+					</button>
+				</div>
+			)}
 			{onReset && !isDefault && (
 				<div className="shrink-0 pr-2 flex items-center">
 					<Button

@@ -25,7 +25,55 @@ export class UpdateElementsCommand extends Command {
 		}>;
 	}) {
 		super();
-		this.updates = updates;
+		let nextUpdates = [...updates];
+		
+		try {
+			const { useCaptionGlobalModeStore } = require("../../../subtitles/stores/caption-global-mode-store");
+			const isGlobalMode = useCaptionGlobalModeStore.getState().isGlobalMode;
+
+			if (isGlobalMode) {
+				const editor = EditorCore.getInstance();
+				const activeScene = editor.scenes.getActiveSceneOrNull();
+				if (activeScene) {
+					const siblingUpdates: typeof updates = [];
+					for (const update of updates) {
+						const track = activeScene.tracks.overlay.find(
+							(t) => t.id === update.trackId && t.type === "text",
+						);
+						if (!track) continue;
+
+						const element = track.elements.find((el) => el.id === update.elementId);
+						if (element && element.type === "text") {
+							const siblings = track.elements.filter((el) => el.id !== element.id);
+							for (const sibling of siblings) {
+								const siblingPatch: Partial<TimelineElement> = {};
+								if (update.patch.params) {
+									const paramsPatch = { ...update.patch.params };
+									delete paramsPatch.content;
+									if (Object.keys(paramsPatch).length > 0) {
+										siblingPatch.params = paramsPatch;
+									}
+								}
+								if (Object.keys(siblingPatch).length > 0) {
+									siblingUpdates.push({
+										trackId: update.trackId,
+										elementId: sibling.id,
+										patch: siblingPatch,
+									});
+								}
+							}
+						}
+					}
+					if (siblingUpdates.length > 0) {
+						nextUpdates = [...nextUpdates, ...siblingUpdates];
+					}
+				}
+			}
+		} catch (e) {
+			// ignore on SSR or initialization
+		}
+
+		this.updates = nextUpdates;
 	}
 
 	execute(): CommandResult | undefined {

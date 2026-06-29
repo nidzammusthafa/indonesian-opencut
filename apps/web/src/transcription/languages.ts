@@ -1,5 +1,7 @@
 export const LANGUAGES = [
 	{ code: "en", name: "English" },
+	{ code: "id", name: "Indonesian" },
+	{ code: "ms", name: "Malay" },
 	{ code: "es", name: "Spanish" },
 	{ code: "it", name: "Italian" },
 	{ code: "fr", name: "French" },

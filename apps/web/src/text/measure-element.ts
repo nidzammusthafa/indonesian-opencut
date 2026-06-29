@@ -22,7 +22,9 @@ export interface ResolvedTextBackground extends TextBackground {
 	offsetX: number;
 	offsetY: number;
 	cornerRadius: number;
+	opacity: number;
 }
+
 
 export interface MeasuredTextElement extends MeasuredTextLayout {
 	resolvedBackground: ResolvedTextBackground;
@@ -108,9 +110,15 @@ export function measureTextElement({
 			localTime,
 		}),
 		cornerRadius: resolveNumberAtTime({
-			baseValue: bg.cornerRadius ?? CORNER_RADIUS_MIN,
+			baseValue: bg.cornerRadius ?? DEFAULTS.text.background.cornerRadius,
 			animations: element.animations,
 			propertyPath: "background.cornerRadius",
+			localTime,
+		}),
+		opacity: resolveNumberAtTime({
+			baseValue: bg.opacity ?? DEFAULTS.text.background.opacity,
+			animations: element.animations,
+			propertyPath: "background.opacity",
 			localTime,
 		}),
 	};
@@ -194,6 +202,11 @@ export function buildTextBackgroundFromElement({
 			params: element.params,
 			key: "background.color",
 			fallback: DEFAULTS.text.background.color,
+		}),
+		opacity: readNumberParam({
+			params: element.params,
+			key: "background.opacity",
+			fallback: DEFAULTS.text.background.opacity,
 		}),
 		cornerRadius: readNumberParam({
 			params: element.params,

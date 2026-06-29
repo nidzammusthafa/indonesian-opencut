@@ -13,6 +13,14 @@ export const EXPORT_FORMAT_VALUES = ["mp4", "webm"] as const;
 export type ExportFormat = (typeof EXPORT_FORMAT_VALUES)[number];
 export type ExportQuality = (typeof EXPORT_QUALITY_VALUES)[number];
 
+export const QUALITY_RESOLUTION_MAP = {
+	low: { label: "360p", heightMax: 360, bitrateMbps: 1 },
+	medium: { label: "720p", heightMax: 720, bitrateMbps: 4 },
+	high: { label: "1080p", heightMax: 1080, bitrateMbps: 8 },
+	very_high: { label: "4K", heightMax: 2160, bitrateMbps: 20 },
+} as const satisfies Record<ExportQuality, { label: string; heightMax: number; bitrateMbps: number }>;
+
+
 export interface ExportOptions {
 	format: ExportFormat;
 	quality: ExportQuality;

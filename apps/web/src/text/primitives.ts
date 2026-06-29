@@ -51,6 +51,7 @@ export interface ResolvedTextBackgroundLike {
 	offsetX: number;
 	offsetY: number;
 	cornerRadius: number;
+	opacity?: number;
 }
 
 export function quoteFontFamily({ fontFamily }: { fontFamily: string }): string {
@@ -144,6 +145,8 @@ export function drawMeasuredTextLayout({
 	textColor,
 	background,
 	backgroundColor,
+	stroke,
+	highlight,
 	textBaseline = "middle",
 }: {
 	ctx: TextCanvasContext;
@@ -151,6 +154,19 @@ export function drawMeasuredTextLayout({
 	textColor: string;
 	background?: ResolvedTextBackgroundLike | null;
 	backgroundColor?: string;
+	stroke?: {
+		enabled: boolean;
+		color: string;
+		width: number;
+	} | null;
+	highlight?: {
+		enabled: boolean;
+		color: string;
+		activeWordIndex: number;
+		borderColor?: string;
+		borderWidth?: number;
+		fontSize?: number; // scale multiplier e.g. 1.2 = 20% bigger
+	} | null;
 	textBaseline?: CanvasTextBaseline;
 }): void {
 	ctx.font = layout.fontString;
@@ -183,6 +199,9 @@ export function drawMeasuredTextLayout({
 				}) / 100;
 			const radius =
 				(Math.min(backgroundRect.width, backgroundRect.height) / 2) * p;
+			const originalAlpha = ctx.globalAlpha;
+			const opacity = background.opacity !== undefined ? background.opacity / 100 : 1;
+			ctx.globalAlpha = originalAlpha * opacity;
 			ctx.fillStyle = backgroundColor;
 			ctx.beginPath();
 			ctx.roundRect(
@@ -193,13 +212,137 @@ export function drawMeasuredTextLayout({
 				radius,
 			);
 			ctx.fill();
+			ctx.globalAlpha = originalAlpha;
 			ctx.fillStyle = textColor;
 		}
 	}
 
+	let globalWordCounter = 0;
+
 	for (let index = 0; index < layout.lines.length; index++) {
 		const lineY = index * layout.lineHeightPx - layout.block.visualCenterOffset;
-		ctx.fillText(layout.lines[index], 0, lineY);
+		const line = layout.lines[index];
+
+		if (highlight?.enabled) {
+			const words = line.split(" ");
+			const highlightFontScale = highlight.fontSize ?? 1;
+
+			// --- Pass 1: measure each word's width using its actual font ---
+			// We need to know the scaled width of the active word to correctly
+			// compute the total line width for alignment offset.
+			const wordWidths: number[] = [];
+			let totalLineWidth = 0;
+
+			for (let w = 0; w < words.length; w++) {
+				const isActive = (globalWordCounter + w) === highlight.activeWordIndex;
+				const wordSpace = words[w] + (w < words.length - 1 ? " " : "");
+
+				if (isActive && highlightFontScale !== 1) {
+					// Temporarily switch to scaled font to measure
+					const scaledFont = layout.fontString.replace(
+						/(\d+(?:\.\d+)?)px/,
+						(_match, size) => `${parseFloat(size) * highlightFontScale}px`,
+					);
+					ctx.save();
+					ctx.font = scaledFont;
+					setCanvasLetterSpacing({ ctx, letterSpacingPx: layout.letterSpacing });
+					const w_scaled = ctx.measureText(wordSpace).width;
+					ctx.restore();
+					wordWidths.push(w_scaled);
+					totalLineWidth += w_scaled;
+				} else {
+					// Normal font
+					ctx.save();
+					ctx.font = layout.fontString;
+					setCanvasLetterSpacing({ ctx, letterSpacingPx: layout.letterSpacing });
+					const w_normal = ctx.measureText(wordSpace).width;
+					ctx.restore();
+					wordWidths.push(w_normal);
+					totalLineWidth += w_normal;
+				}
+			}
+
+			// --- Compute start X based on alignment using true total width ---
+			let currentX = 0;
+			if (layout.textAlign === "center") {
+				currentX = -totalLineWidth / 2;
+			} else if (layout.textAlign === "right") {
+				currentX = -totalLineWidth;
+			}
+			// "left" → currentX stays 0
+
+			const originalTextAlign: CanvasTextAlign = ctx.textAlign;
+			ctx.textAlign = "left";
+
+			// --- Pass 2: draw each word at its computed position ---
+			for (let w = 0; w < words.length; w++) {
+				const word = words[w];
+				const isWordActive = globalWordCounter === highlight.activeWordIndex;
+				const wordSpace = word + (w < words.length - 1 ? " " : "");
+				const scaledWordWidth = wordWidths[w];
+
+				ctx.save();
+
+				if (isWordActive && highlightFontScale !== 1) {
+					// Scale font for active word
+					const scaledFont = layout.fontString.replace(
+						/(\d+(?:\.\d+)?)px/,
+						(_match, size) => `${parseFloat(size) * highlightFontScale}px`,
+					);
+					ctx.font = scaledFont;
+					setCanvasLetterSpacing({ ctx, letterSpacingPx: layout.letterSpacing });
+				} else {
+					ctx.font = layout.fontString;
+					setCanvasLetterSpacing({ ctx, letterSpacingPx: layout.letterSpacing });
+				}
+
+				// Draw position — already correct because we used scaled widths in Pass 1
+				const drawX = currentX;
+
+				if (isWordActive) {
+					ctx.fillStyle = highlight.color;
+				} else {
+					ctx.fillStyle = textColor;
+				}
+
+				// Global stroke (text border)
+				if (stroke?.enabled) {
+					ctx.strokeStyle = stroke.color;
+					ctx.lineWidth = stroke.width * (layout.scaledFontSize / 15);
+					ctx.lineJoin = "round";
+					ctx.lineCap = "round";
+					ctx.strokeText(wordSpace, drawX, lineY);
+				}
+
+				// Highlight border for active word
+				if (isWordActive && highlight.borderWidth && highlight.borderWidth > 0) {
+					ctx.strokeStyle = highlight.borderColor ?? "#000000";
+					ctx.lineWidth = highlight.borderWidth * (layout.scaledFontSize / 15);
+					ctx.lineJoin = "round";
+					ctx.lineCap = "round";
+					ctx.strokeText(wordSpace, drawX, lineY);
+				}
+
+				ctx.fillText(wordSpace, drawX, lineY);
+				ctx.restore();
+
+				// Advance X by the pre-measured scaled word width
+				currentX += scaledWordWidth;
+				globalWordCounter++;
+			}
+
+			ctx.textAlign = originalTextAlign;
+		} else {
+			if (stroke?.enabled) {
+				ctx.strokeStyle = stroke.color;
+				ctx.lineWidth = stroke.width * (layout.scaledFontSize / 15);
+				ctx.lineJoin = "round";
+				ctx.lineCap = "round";
+				ctx.strokeText(line, 0, lineY);
+			}
+			ctx.fillText(line, 0, lineY);
+		}
+
 		drawTextDecoration({
 			ctx,
 			textDecoration: layout.textDecoration,
