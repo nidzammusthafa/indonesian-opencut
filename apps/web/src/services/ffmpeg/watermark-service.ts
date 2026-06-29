@@ -1,4 +1,5 @@
 import { getFFmpeg } from "./ffmpeg-service";
+import type { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 
 export interface WatermarkOptions {
@@ -24,15 +25,17 @@ export interface WatermarkOptions {
 	imageFile2?: File | null;
 }
 
-const getVideoMetadata = (file: File): Promise<{ width: number; height: number; duration: number }> => {
+const getVideoMetadata = (
+	file: File,
+): Promise<{ width: number; height: number; duration: number }> => {
 	return new Promise((resolve, reject) => {
 		const url = URL.createObjectURL(file);
 		const video = document.createElement("video");
 		video.onloadedmetadata = () => {
-			resolve({ 
-				width: video.videoWidth, 
-				height: video.videoHeight, 
-				duration: video.duration || 10 // fallback to 10s if not readable
+			resolve({
+				width: video.videoWidth,
+				height: video.videoHeight,
+				duration: video.duration || 10, // fallback to 10s if not readable
 			});
 			URL.revokeObjectURL(url);
 		};
@@ -54,7 +57,13 @@ function escapeFFmpegText(text: string): string {
 		.replace(/%/g, "\\%");
 }
 
-async function prepareWatermarkFont(ffmpeg: any, fontFamily?: string): Promise<string> {
+async function prepareWatermarkFont({
+	ffmpeg,
+	fontFamily,
+}: {
+	ffmpeg: FFmpeg;
+	fontFamily?: string;
+}): Promise<string> {
 	const font = fontFamily || "Inter";
 	const FONT_MAP: Record<string, { fileName: string; urls: string[] }> = {
 		Inter: {
@@ -170,7 +179,9 @@ async function prepareWatermarkFont(ffmpeg: any, fontFamily?: string): Promise<s
 		if (exists && exists.length > 1000) {
 			return config.fileName;
 		}
-	} catch (e) {}
+	} catch (_e) {
+		// Font has not been written to the FFmpeg filesystem yet.
+	}
 
 	for (const url of config.urls) {
 		try {
@@ -193,11 +204,15 @@ async function prepareWatermarkFont(ffmpeg: any, fontFamily?: string): Promise<s
 	return "Inter-Bold.ttf";
 }
 
-export const addWatermark = async (
-	file: File,
-	options: WatermarkOptions,
-	onProgress: (progress: number) => void,
-): Promise<string> => {
+export const addWatermark = async ({
+	file,
+	options,
+	onProgress,
+}: {
+	file: File;
+	options: WatermarkOptions;
+	onProgress: (progress: number) => void;
+}): Promise<string> => {
 	const ffmpeg = await getFFmpeg();
 
 	const handleProgress = ({ progress }: { progress: number }) => {
@@ -205,7 +220,7 @@ export const addWatermark = async (
 	};
 	ffmpeg.on("progress", handleProgress);
 
-	const { width: vw, height: vh, duration } = await getVideoMetadata(file);
+	const { width: vw, duration } = await getVideoMetadata(file);
 	const halfDuration = (duration / 2).toFixed(3);
 
 	const buffer = await file.arrayBuffer();
@@ -214,8 +229,13 @@ export const addWatermark = async (
 
 	await ffmpeg.writeFile(inputName, new Uint8Array(buffer));
 
-	const fontFileName = await prepareWatermarkFont(ffmpeg, options.fontFamily);
-	const virtualFontPath = fontFileName.startsWith("/") ? fontFileName : `/${fontFileName}`;
+	const fontFileName = await prepareWatermarkFont({
+		ffmpeg,
+		fontFamily: options.fontFamily,
+	});
+	const virtualFontPath = fontFileName.startsWith("/")
+		? fontFileName
+		: `/${fontFileName}`;
 
 	let imageName1 = "";
 	let imageName2 = "";
@@ -255,7 +275,10 @@ export const addWatermark = async (
 			let borderParams = "";
 			if (options.borderWidth && options.borderWidth > 0) {
 				const borderW = options.borderWidth;
-				const borderColorHex = (options.borderColor || "#000000").replace("#", "0x");
+				const borderColorHex = (options.borderColor || "#000000").replace(
+					"#",
+					"0x",
+				);
 				borderParams = `:borderw=${borderW}:bordercolor=${borderColorHex}@1.0`;
 			}
 
@@ -288,14 +311,20 @@ export const addWatermark = async (
 				const escapedText = escapeFFmpegText(cleanText);
 				const fSize = options.fontSize || 24;
 				const op = ((options.opacity ?? 60) / 100).toFixed(2);
-				const fontColorHex = (options.fontColor || "#ffffff").replace("#", "0x");
+				const fontColorHex = (options.fontColor || "#ffffff").replace(
+					"#",
+					"0x",
+				);
 				const xFactor = (xPercent2 / 100).toFixed(3);
 				const yFactor = (yPercent2 / 100).toFixed(3);
 
 				let borderParams = "";
 				if (options.borderWidth && options.borderWidth > 0) {
 					const borderW = options.borderWidth;
-					const borderColorHex = (options.borderColor || "#000000").replace("#", "0x");
+					const borderColorHex = (options.borderColor || "#000000").replace(
+						"#",
+						"0x",
+					);
 					borderParams = `:borderw=${borderW}:bordercolor=${borderColorHex}@1.0`;
 				}
 
@@ -311,23 +340,28 @@ export const addWatermark = async (
 
 				const nextOut = `[v_wm2]`;
 				// Logo 2 index depends on whether Logo 1 was also an image. If Logo 1 was image, Logo 2 is input 2. Otherwise input 1.
-				const logo2InputIndex = (options.type === "image") ? 2 : 1;
+				const logo2InputIndex = options.type === "image" ? 2 : 1;
 				filterComplex += `[${logo2InputIndex}:v]scale=w=${targetLogoWidth}:h=-1,format=rgba,colorchannelmixer=aa=${op}[wm2_scaled]; `;
 				filterComplex += `${lastOut}[wm2_scaled]overlay=x=(W-w)*${xFactor}:y=(H-h)*${yFactor}${enableTime2}${nextOut}; `;
 				lastOut = nextOut;
 			}
 		}
 
-		// Remove trailing semicolon and space from filterComplex, and map to output
+		// Remove trailing semicolon and map the final labeled video stream explicitly.
 		let filterComplexClean = filterComplex.trim();
 		if (filterComplexClean.endsWith(";")) {
 			filterComplexClean = filterComplexClean.slice(0, -1);
 		}
 
-		// Bind final output name
 		if (lastOut !== "[0:v]") {
-			filterComplexClean = filterComplexClean.replace(new RegExp(lastOut.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$"), "");
-			execArgs.push("-filter_complex", filterComplexClean);
+			execArgs.push(
+				"-filter_complex",
+				filterComplexClean,
+				"-map",
+				lastOut,
+				"-map",
+				"0:a?",
+			);
 		}
 
 		execArgs.push(
@@ -347,7 +381,11 @@ export const addWatermark = async (
 		await ffmpeg.exec(execArgs);
 
 		const data = await ffmpeg.readFile(outputName);
-		const blob = new Blob([data as any], { type: "video/mp4" });
+		const bytes =
+			typeof data === "string" ? new TextEncoder().encode(data) : data;
+		const outputBuffer = new ArrayBuffer(bytes.byteLength);
+		new Uint8Array(outputBuffer).set(bytes);
+		const blob = new Blob([outputBuffer], { type: "video/mp4" });
 		const url = URL.createObjectURL(blob);
 
 		return url;
@@ -358,19 +396,27 @@ export const addWatermark = async (
 		ffmpeg.off("progress", handleProgress);
 		try {
 			await ffmpeg.deleteFile(inputName);
-		} catch (e) {}
+		} catch (_e) {
+			// Best-effort cleanup.
+		}
 		try {
 			await ffmpeg.deleteFile(outputName);
-		} catch (e) {}
+		} catch (_e) {
+			// Best-effort cleanup.
+		}
 		if (imageName1) {
 			try {
 				await ffmpeg.deleteFile(imageName1);
-			} catch (e) {}
+			} catch (_e) {
+				// Best-effort cleanup.
+			}
 		}
 		if (imageName2) {
 			try {
 				await ffmpeg.deleteFile(imageName2);
-			} catch (e) {}
+			} catch (_e) {
+				// Best-effort cleanup.
+			}
 		}
 	}
 };

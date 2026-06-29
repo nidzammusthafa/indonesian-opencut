@@ -9,22 +9,24 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { FontPicker } from "@/components/ui/font-picker";
-import { 
-	Play, 
-	Check, 
-	AlertTriangle, 
-	FileVideo, 
-	Image as ImageIcon, 
-	Type as TypeIcon, 
-	Download, 
+import {
+	Play,
+	Square,
+	Check,
+	AlertTriangle,
+	FileVideo,
+	Image as ImageIcon,
+	Type as TypeIcon,
+	Download,
 	FolderArchive,
 	Trash2,
 	Plus,
 	UploadCloud,
-	ChevronRight,
-	Minimize2
 } from "lucide-react";
-import { addWatermark, type WatermarkOptions } from "@/services/ffmpeg/watermark-service";
+import {
+	addWatermark,
+	type WatermarkOptions,
+} from "@/services/ffmpeg/watermark-service";
 import JSZip from "jszip";
 
 interface VideoQueueItem {
@@ -39,15 +41,17 @@ interface VideoQueueItem {
 	duration?: number;
 }
 
-const getVideoMetadata = (file: File): Promise<{ width: number; height: number; duration: number }> => {
+const getVideoMetadata = (
+	file: File,
+): Promise<{ width: number; height: number; duration: number }> => {
 	return new Promise((resolve, reject) => {
 		const url = URL.createObjectURL(file);
 		const video = document.createElement("video");
 		video.onloadedmetadata = () => {
-			resolve({ 
-				width: video.videoWidth, 
-				height: video.videoHeight, 
-				duration: video.duration || 10
+			resolve({
+				width: video.videoWidth,
+				height: video.videoHeight,
+				duration: video.duration || 10,
 			});
 			URL.revokeObjectURL(url);
 		};
@@ -64,7 +68,9 @@ export default function WatermarkPage() {
 	const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
 	// Aspect ratio config
-	const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16" | "1:1" | "4:3">("16:9");
+	const [aspectRatio, setAspectRatio] = useState<
+		"16:9" | "9:16" | "1:1" | "4:3"
+	>("16:9");
 
 	// Watermark 1 configuration
 	const [watermarkType, setWatermarkType] = useState<"text" | "image">("text");
@@ -80,19 +86,25 @@ export default function WatermarkPage() {
 	const [logoSize, setLogoSize] = useState(15);
 
 	// Position 1 configuration
-	const [positionPreset, setPositionPreset] = useState<"tl" | "tr" | "c" | "bl" | "br" | "custom">("tr");
+	const [positionPreset, setPositionPreset] = useState<
+		"tl" | "tr" | "c" | "bl" | "br" | "custom"
+	>("tr");
 	const [xPercent, setXPercent] = useState(90);
 	const [yPercent, setYPercent] = useState(10);
 
 	// Watermark 2 (Dual) configuration
 	const [isDual, setIsDual] = useState(false);
-	const [watermarkType2, setWatermarkType2] = useState<"text" | "image">("text");
+	const [watermarkType2, setWatermarkType2] = useState<"text" | "image">(
+		"text",
+	);
 	const [watermarkText2, setWatermarkText2] = useState("Watermark Akhir");
 	const [logoFile2, setLogoFile2] = useState<File | null>(null);
 	const [logoPreviewUrl2, setLogoPreviewUrl2] = useState<string | null>(null);
-	
+
 	// Position 2 configuration
-	const [positionPreset2, setPositionPreset2] = useState<"tl" | "tr" | "c" | "bl" | "br" | "custom">("br");
+	const [positionPreset2, setPositionPreset2] = useState<
+		"tl" | "tr" | "c" | "bl" | "br" | "custom"
+	>("br");
 	const [xPercent2, setXPercent2] = useState(90);
 	const [yPercent2, setYPercent2] = useState(90);
 
@@ -103,13 +115,47 @@ export default function WatermarkPage() {
 	const [isProcessingBatch, setIsProcessingBatch] = useState(false);
 	const [isDragActive, setIsDragActive] = useState(false);
 	const [isZipping, setIsZipping] = useState(false);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [cancelRequested, setCancelRequested] = useState(false);
 
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const logoInputRef = useRef<HTMLInputElement>(null);
 	const logoInputRef2 = useRef<HTMLInputElement>(null);
 	const previewContainerRef = useRef<HTMLDivElement>(null);
 	const videoRef = useRef<HTMLVideoElement>(null);
+	const queueRef = useRef<VideoQueueItem[]>([]);
+	const logoPreviewUrlRef = useRef<string | null>(null);
+	const logoPreviewUrl2Ref = useRef<string | null>(null);
+	const cancelRequestedRef = useRef(false);
 
+	useEffect(() => {
+		queueRef.current = queue;
+	}, [queue]);
+
+	useEffect(() => {
+		logoPreviewUrlRef.current = logoPreviewUrl;
+	}, [logoPreviewUrl]);
+
+	useEffect(() => {
+		logoPreviewUrl2Ref.current = logoPreviewUrl2;
+	}, [logoPreviewUrl2]);
+
+	useEffect(() => {
+		cancelRequestedRef.current = cancelRequested;
+	}, [cancelRequested]);
+
+	useEffect(() => {
+		return () => {
+			queueRef.current.forEach((item) => {
+				URL.revokeObjectURL(item.previewUrl);
+				if (item.outputUrl) URL.revokeObjectURL(item.outputUrl);
+			});
+			if (logoPreviewUrlRef.current)
+				URL.revokeObjectURL(logoPreviewUrlRef.current);
+			if (logoPreviewUrl2Ref.current)
+				URL.revokeObjectURL(logoPreviewUrl2Ref.current);
+		};
+	}, []);
 
 	const applyPreset = (preset: "tl" | "tr" | "c" | "bl" | "br") => {
 		setPositionPreset(preset);
@@ -163,11 +209,17 @@ export default function WatermarkPage() {
 		}
 	};
 
-	const handleFiles = useCallback(async (files: FileList) => {
-		const newItems: VideoQueueItem[] = [];
-		for (let i = 0; i < files.length; i++) {
-			const file = files[i];
-			if (file.type.startsWith("video/")) {
+	const handleFiles = useCallback(
+		async (files: FileList) => {
+			const newItems: VideoQueueItem[] = [];
+			let skippedFiles = 0;
+			for (let i = 0; i < files.length; i++) {
+				const file = files[i];
+				if (!file.type.startsWith("video/")) {
+					skippedFiles += 1;
+					continue;
+				}
+
 				try {
 					const meta = await getVideoMetadata(file);
 					newItems.push({
@@ -194,16 +246,30 @@ export default function WatermarkPage() {
 					});
 				}
 			}
-		}
 
-		setQueue((q) => {
-			const merged = [...q, ...newItems];
-			if (merged.length > 0 && !activeVideoId) {
-				setActiveVideoId(merged[0].id);
+			if (skippedFiles > 0) {
+				setErrorMessage(`${skippedFiles} file dilewati karena bukan video.`);
+			} else {
+				setErrorMessage(null);
 			}
-			return merged;
-		});
-	}, [activeVideoId]);
+
+			setQueue((q) => {
+				const merged = [...q, ...newItems];
+				if (merged.length > 0 && !activeVideoId) {
+					setActiveVideoId(merged[0].id);
+				}
+				return merged;
+			});
+		},
+		[activeVideoId],
+	);
+
+	const handleVideoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		if (e.target.files) {
+			handleFiles(e.target.files);
+		}
+		e.target.value = "";
+	};
 
 	// Global drag & drop listener to allow dropping files anywhere on the page
 	useEffect(() => {
@@ -259,23 +325,37 @@ export default function WatermarkPage() {
 	const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (file) {
+			if (!file.type.startsWith("image/")) {
+				setErrorMessage("File logo harus berupa gambar.");
+				e.target.value = "";
+				return;
+			}
 			setLogoFile(file);
 			if (logoPreviewUrl) {
 				URL.revokeObjectURL(logoPreviewUrl);
 			}
 			setLogoPreviewUrl(URL.createObjectURL(file));
+			setErrorMessage(null);
 		}
+		e.target.value = "";
 	};
 
 	const handleLogoUpload2 = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (file) {
+			if (!file.type.startsWith("image/")) {
+				setErrorMessage("File logo kedua harus berupa gambar.");
+				e.target.value = "";
+				return;
+			}
 			setLogoFile2(file);
 			if (logoPreviewUrl2) {
 				URL.revokeObjectURL(logoPreviewUrl2);
 			}
 			setLogoPreviewUrl2(URL.createObjectURL(file));
+			setErrorMessage(null);
 		}
+		e.target.value = "";
 	};
 
 	// Calculate exact scale factor for preview sync
@@ -375,18 +455,30 @@ export default function WatermarkPage() {
 
 	const startBatchProcess = async () => {
 		if (queue.length === 0) return;
+		setErrorMessage(null);
 		if (watermarkType === "image" && !logoFile) {
-			alert("Silakan unggah logo watermark PNG terlebih dahulu!");
+			setErrorMessage("Silakan unggah logo watermark terlebih dahulu.");
+			return;
+		}
+		if (watermarkType === "text" && !watermarkText.trim()) {
+			setErrorMessage("Teks watermark utama tidak boleh kosong.");
 			return;
 		}
 		if (isDual && watermarkType2 === "image" && !logoFile2) {
-			alert("Silakan unggah logo watermark kedua terlebih dahulu!");
+			setErrorMessage("Silakan unggah logo watermark kedua terlebih dahulu.");
+			return;
+		}
+		if (isDual && watermarkType2 === "text" && !watermarkText2.trim()) {
+			setErrorMessage("Teks watermark kedua tidak boleh kosong.");
 			return;
 		}
 
+		setCancelRequested(false);
+		cancelRequestedRef.current = false;
 		setIsProcessingBatch(true);
 
 		for (const item of queue) {
+			if (cancelRequestedRef.current) break;
 			if (item.status === "done") continue;
 
 			setQueue((q) =>
@@ -420,10 +512,14 @@ export default function WatermarkPage() {
 			};
 
 			try {
-				const outUrl = await addWatermark(item.file, opt, (p) => {
-					setQueue((q) =>
-						q.map((v) => (v.id === item.id ? { ...v, progress: p } : v)),
-					);
+				const outUrl = await addWatermark({
+					file: item.file,
+					options: opt,
+					onProgress: (p) => {
+						setQueue((q) =>
+							q.map((v) => (v.id === item.id ? { ...v, progress: p } : v)),
+						);
+					},
 				});
 				setQueue((q) =>
 					q.map((v) =>
@@ -434,17 +530,35 @@ export default function WatermarkPage() {
 				);
 			} catch (err) {
 				console.error(`Gagal memproses watermark pada ${item.file.name}:`, err);
+				setErrorMessage(
+					`Gagal memproses ${item.file.name}. Coba file lain atau ukuran video lebih kecil.`,
+				);
 				setQueue((q) =>
 					q.map((v) => (v.id === item.id ? { ...v, status: "error" } : v)),
 				);
 			}
 		}
 
+		if (cancelRequestedRef.current) {
+			setErrorMessage("Pemrosesan dihentikan setelah video saat ini selesai.");
+		}
 		setIsProcessingBatch(false);
+		setCancelRequested(false);
 	};
 
-	const removeVideo = (id: string, e: React.MouseEvent) => {
-		e.stopPropagation();
+	const requestCancelProcessing = () => {
+		cancelRequestedRef.current = true;
+		setCancelRequested(true);
+	};
+
+	const removeVideo = ({
+		id,
+		event,
+	}: {
+		id: string;
+		event: React.MouseEvent;
+	}) => {
+		event.stopPropagation();
 		const item = queue.find((q) => q.id === id);
 		if (item) {
 			URL.revokeObjectURL(item.previewUrl);
@@ -452,6 +566,39 @@ export default function WatermarkPage() {
 		}
 		setQueue((q) => q.filter((v) => v.id !== id));
 		if (activeVideoId === id) setActiveVideoId(null);
+	};
+
+	const handleQueueItemKeyDown = ({
+		id,
+		event,
+	}: {
+		id: string;
+		event: React.KeyboardEvent<HTMLDivElement>;
+	}) => {
+		if (isProcessingBatch) return;
+		if (event.key === "Enter" || event.key === " ") {
+			event.preventDefault();
+			setActiveVideoId(id);
+		}
+	};
+
+	const handleUploadZoneKeyDown = (
+		event: React.KeyboardEvent<HTMLDivElement>,
+	) => {
+		if (event.key === "Enter" || event.key === " ") {
+			event.preventDefault();
+			fileInputRef.current?.click();
+		}
+	};
+
+	const clearQueue = () => {
+		queue.forEach((item) => {
+			URL.revokeObjectURL(item.previewUrl);
+			if (item.outputUrl) URL.revokeObjectURL(item.outputUrl);
+		});
+		setQueue([]);
+		setActiveVideoId(null);
+		setErrorMessage(null);
 	};
 
 	const downloadAllAsZip = async () => {
@@ -503,23 +650,38 @@ export default function WatermarkPage() {
 	}, []);
 
 	// Aspect ratio class helper
-	const aspectClass = 
-		aspectRatio === "16:9" ? "aspect-video" :
-		aspectRatio === "9:16" ? "aspect-[9/16]" :
-		aspectRatio === "1:1" ? "aspect-square" :
-		"aspect-[4/3]";
+	const aspectClass =
+		aspectRatio === "16:9"
+			? "aspect-video"
+			: aspectRatio === "9:16"
+				? "aspect-[9/16]"
+				: aspectRatio === "1:1"
+					? "aspect-square"
+					: "aspect-[4/3]";
 
 	return (
 		<div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-blue-200">
 			<Header />
+			<input
+				type="file"
+				ref={fileInputRef}
+				accept="video/*"
+				multiple
+				className="hidden"
+				onChange={handleVideoInputChange}
+			/>
 
 			{/* Global Drag & Drop Overlay */}
 			{isDragActive && (
 				<div className="fixed inset-0 bg-blue-600/10 backdrop-blur-md border-4 border-dashed border-blue-500 z-50 flex flex-col items-center justify-center pointer-events-none">
 					<div className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl flex flex-col items-center shadow-2xl animate-bounce">
 						<UploadCloud size={48} className="text-blue-500 mb-2" />
-						<h3 className="text-sm font-bold text-white">Lepaskan untuk Menambahkan Video</h3>
-						<p className="text-[10px] text-zinc-400 mt-1">Dukung format MP4, WebM, MOV, dll.</p>
+						<h3 className="text-sm font-bold text-white">
+							Lepaskan untuk Menambahkan Video
+						</h3>
+						<p className="text-[10px] text-zinc-400 mt-1">
+							Dukung format MP4, WebM, MOV, dll.
+						</p>
 					</div>
 				</div>
 			)}
@@ -532,14 +694,15 @@ export default function WatermarkPage() {
 							Watermark Massal
 						</h1>
 						<p className="text-xs text-zinc-400 mt-1">
-							Bakar watermark teks atau logo gambar secara cepat ke banyak video sekaligus.
+							Bakar watermark teks atau logo gambar secara cepat ke banyak video
+							sekaligus.
 						</p>
 					</div>
 					<div className="flex items-center gap-2">
 						{queue.length > 0 && (
 							<Button
 								variant="outline"
-								onClick={() => setQueue([])}
+								onClick={clearQueue}
 								disabled={isProcessingBatch}
 								size="sm"
 								className="text-xs text-zinc-400 border-zinc-800 hover:bg-zinc-900"
@@ -548,6 +711,15 @@ export default function WatermarkPage() {
 							</Button>
 						)}
 					</div>
+					{errorMessage && (
+						<div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+							<AlertTriangle
+								size={16}
+								className="mt-0.5 shrink-0 text-amber-300"
+							/>
+							<span>{errorMessage}</span>
+						</div>
+					)}
 				</div>
 
 				{/* Drag & Drop Upload Zone */}
@@ -557,26 +729,22 @@ export default function WatermarkPage() {
 						onDragLeave={onDragLeave}
 						onDrop={onDrop}
 						onClick={() => fileInputRef.current?.click()}
+						onKeyDown={handleUploadZoneKeyDown}
+						role="button"
+						tabIndex={0}
 						className={`flex-grow border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-12 text-center cursor-pointer transition-all duration-300 ${
 							isDragActive
 								? "border-blue-500 bg-blue-600/5"
 								: "border-zinc-800 bg-zinc-900/10 hover:border-zinc-700 hover:bg-zinc-900/20"
 						}`}
 					>
-						<input
-							type="file"
-							ref={fileInputRef}
-							accept="video/*"
-							multiple
-							className="hidden"
-							onChange={(e) => e.target.files && handleFiles(e.target.files)}
-						/>
 						<div className="p-4 bg-zinc-900 rounded-full border border-zinc-800 shadow-md mb-4 text-blue-400">
 							<UploadCloud size={32} />
 						</div>
 						<h3 className="font-semibold text-sm">Unggah Video Anda</h3>
 						<p className="text-xs text-zinc-400 max-w-xs mt-2 leading-relaxed">
-							Seret dan letakkan file video di sini, atau klik untuk memilih file dari komputer Anda.
+							Seret dan letakkan file video di sini, atau klik untuk memilih
+							file dari komputer Anda.
 						</p>
 					</div>
 				) : (
@@ -642,15 +810,18 @@ export default function WatermarkPage() {
 														opacity: opacity / 100,
 														fontWeight: "bold",
 														whiteSpace: "nowrap",
-														textShadow: borderWidth > 0
-															? `-${borderWidth}px -${borderWidth}px 0 ${borderColor}, ${borderWidth}px -${borderWidth}px 0 ${borderColor}, -${borderWidth}px ${borderWidth}px 0 ${borderColor}, ${borderWidth}px ${borderWidth}px 0 ${borderColor}`
-															: "none",
+														textShadow:
+															borderWidth > 0
+																? `-${borderWidth}px -${borderWidth}px 0 ${borderColor}, ${borderWidth}px -${borderWidth}px 0 ${borderColor}, -${borderWidth}px ${borderWidth}px 0 ${borderColor}, ${borderWidth}px ${borderWidth}px 0 ${borderColor}`
+																: "none",
 													}}
 													className="relative"
 												>
 													{watermarkText || "Watermark Awal"}
 													{isDual && (
-														<span className="absolute -top-4 left-0 bg-blue-500 text-[8px] text-white px-1 rounded whitespace-nowrap">Early (Top)</span>
+														<span className="absolute -top-4 left-0 bg-blue-500 text-[8px] text-white px-1 rounded whitespace-nowrap">
+															Early (Top)
+														</span>
 													)}
 												</div>
 											) : logoPreviewUrl ? (
@@ -665,7 +836,9 @@ export default function WatermarkPage() {
 														}}
 													/>
 													{isDual && (
-														<span className="absolute -top-4 left-0 bg-blue-500 text-[8px] text-white px-1 rounded whitespace-nowrap">Early (Top)</span>
+														<span className="absolute -top-4 left-0 bg-blue-500 text-[8px] text-white px-1 rounded whitespace-nowrap">
+															Early (Top)
+														</span>
 													)}
 												</div>
 											) : (
@@ -696,14 +869,17 @@ export default function WatermarkPage() {
 															opacity: opacity / 100,
 															fontWeight: "bold",
 															whiteSpace: "nowrap",
-															textShadow: borderWidth > 0
-																? `-${borderWidth}px -${borderWidth}px 0 ${borderColor}, ${borderWidth}px -${borderWidth}px 0 ${borderColor}, -${borderWidth}px ${borderWidth}px 0 ${borderColor}, ${borderWidth}px ${borderWidth}px 0 ${borderColor}`
-																: "none",
+															textShadow:
+																borderWidth > 0
+																	? `-${borderWidth}px -${borderWidth}px 0 ${borderColor}, ${borderWidth}px -${borderWidth}px 0 ${borderColor}, -${borderWidth}px ${borderWidth}px 0 ${borderColor}, ${borderWidth}px ${borderWidth}px 0 ${borderColor}`
+																	: "none",
 														}}
 														className="relative"
 													>
 														{watermarkText2 || "Watermark Akhir"}
-														<span className="absolute -top-4 left-0 bg-indigo-500 text-[8px] text-white px-1 rounded whitespace-nowrap">Late (Bottom)</span>
+														<span className="absolute -top-4 left-0 bg-indigo-500 text-[8px] text-white px-1 rounded whitespace-nowrap">
+															Late (Bottom)
+														</span>
 													</div>
 												) : logoPreviewUrl2 ? (
 													<div className="relative">
@@ -716,7 +892,9 @@ export default function WatermarkPage() {
 																opacity: opacity / 100,
 															}}
 														/>
-														<span className="absolute -top-4 left-0 bg-indigo-500 text-[8px] text-white px-1 rounded whitespace-nowrap">Late (Bottom)</span>
+														<span className="absolute -top-4 left-0 bg-indigo-500 text-[8px] text-white px-1 rounded whitespace-nowrap">
+															Late (Bottom)
+														</span>
 													</div>
 												) : (
 													<div className="bg-zinc-900/90 text-[10px] text-zinc-500 border border-dashed border-zinc-800 rounded px-2 py-1 flex items-center gap-1.5 font-sans">
@@ -734,7 +912,9 @@ export default function WatermarkPage() {
 									</div>
 								) : (
 									<div className="aspect-video w-full bg-zinc-950 rounded-lg flex items-center justify-center border border-zinc-850">
-										<p className="text-zinc-500 text-xs">Pilih video dari antrian untuk melihat preview</p>
+										<p className="text-zinc-500 text-xs">
+											Pilih video dari antrian untuk melihat preview
+										</p>
 									</div>
 								)}
 							</div>
@@ -758,12 +938,198 @@ export default function WatermarkPage() {
 									</label>
 								</div>
 
+								<div className="flex flex-col gap-4 border border-zinc-900 p-4 rounded-xl bg-zinc-950/20">
+									<span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
+										Watermark Utama
+									</span>
+
+									<div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950 rounded-lg border border-zinc-855">
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={() => setWatermarkType("text")}
+											className={`text-xs gap-1.5 ${
+												watermarkType === "text"
+													? "bg-zinc-900 text-white font-bold"
+													: "text-zinc-400 hover:text-white"
+											}`}
+										>
+											<TypeIcon size={14} />
+											Teks Watermark
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={() => setWatermarkType("image")}
+											className={`text-xs gap-1.5 ${
+												watermarkType === "image"
+													? "bg-zinc-900 text-white font-bold"
+													: "text-zinc-400 hover:text-white"
+											}`}
+										>
+											<ImageIcon size={14} />
+											Logo Gambar
+										</Button>
+									</div>
+
+									{watermarkType === "text" ? (
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+											<div className="flex flex-col gap-2 md:col-span-2">
+												<Label
+													htmlFor="wm-text"
+													className="text-xs text-zinc-400"
+												>
+													Konten Teks
+												</Label>
+												<Input
+													id="wm-text"
+													value={watermarkText}
+													onChange={(e) => setWatermarkText(e.target.value)}
+													placeholder="Masukkan teks watermark..."
+													className="bg-zinc-950 border-zinc-850 focus-visible:ring-blue-600 text-xs text-white"
+												/>
+											</div>
+
+											<div className="flex flex-col gap-2">
+												<Label className="text-xs text-zinc-400">Font</Label>
+												<FontPicker
+													defaultValue={fontFamily}
+													onValueChange={setFontFamily}
+													className="h-9 bg-zinc-950 border-zinc-850 text-xs text-white"
+												/>
+											</div>
+
+											<div className="flex flex-col gap-2">
+												<div className="flex justify-between items-center">
+													<Label className="text-xs text-zinc-400">
+														Ukuran Teks
+													</Label>
+													<span className="text-xs font-mono font-bold text-blue-400">
+														{fontSize}px
+													</span>
+												</div>
+												<Slider
+													value={[fontSize]}
+													onValueChange={(val) => setFontSize(val[0])}
+													min={12}
+													max={96}
+													step={1}
+												/>
+											</div>
+
+											<div className="flex flex-col gap-2">
+												<Label
+													htmlFor="wm-color"
+													className="text-xs text-zinc-400"
+												>
+													Warna Teks
+												</Label>
+												<Input
+													id="wm-color"
+													type="color"
+													value={fontColor}
+													onChange={(e) => setFontColor(e.target.value)}
+													className="h-9 bg-zinc-950 border-zinc-850 p-1"
+												/>
+											</div>
+
+											<div className="flex flex-col gap-2">
+												<Label
+													htmlFor="wm-border-color"
+													className="text-xs text-zinc-400"
+												>
+													Warna Outline
+												</Label>
+												<Input
+													id="wm-border-color"
+													type="color"
+													value={borderColor}
+													onChange={(e) => setBorderColor(e.target.value)}
+													className="h-9 bg-zinc-950 border-zinc-850 p-1"
+												/>
+											</div>
+
+											<div className="flex flex-col gap-2 md:col-span-2">
+												<div className="flex justify-between items-center">
+													<Label className="text-xs text-zinc-400">
+														Ketebalan Outline
+													</Label>
+													<span className="text-xs font-mono font-bold text-blue-400">
+														{borderWidth}px
+													</span>
+												</div>
+												<Slider
+													value={[borderWidth]}
+													onValueChange={(val) => setBorderWidth(val[0])}
+													min={0}
+													max={10}
+													step={1}
+												/>
+											</div>
+										</div>
+									) : (
+										<div className="flex flex-col gap-4">
+											<div className="flex flex-col gap-2">
+												<Label className="text-xs text-zinc-400">
+													Berkas Logo
+												</Label>
+												<input
+													type="file"
+													ref={logoInputRef}
+													accept="image/*"
+													className="hidden"
+													onChange={handleLogoUpload}
+												/>
+												<div className="flex items-center gap-3">
+													<Button
+														type="button"
+														variant="outline"
+														onClick={() => logoInputRef.current?.click()}
+														className="text-xs border-zinc-800 hover:bg-zinc-900 bg-zinc-950"
+													>
+														Pilih Gambar
+													</Button>
+													{logoFile && (
+														<span className="text-xs text-zinc-400 max-w-[240px] truncate">
+															{logoFile.name}
+														</span>
+													)}
+												</div>
+											</div>
+
+											<div className="flex flex-col gap-2">
+												<div className="flex justify-between items-center">
+													<Label className="text-xs text-zinc-400">
+														Ukuran Logo
+													</Label>
+													<span className="text-xs font-mono font-bold text-blue-400">
+														{logoSize}% lebar video
+													</span>
+												</div>
+												<Slider
+													value={[logoSize]}
+													onValueChange={(val) => setLogoSize(val[0])}
+													min={5}
+													max={60}
+													step={1}
+												/>
+											</div>
+										</div>
+									)}
+								</div>
+
 								{/* Watermark 2 parameters (Dynamic) */}
 								{isDual && (
 									<div className="flex flex-col gap-4 border border-zinc-900 p-4 rounded-xl bg-zinc-950/20">
 										<span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
 											Watermark 2 (Durasi Akhir - Bawah)
 										</span>
+										<p className="text-[10px] leading-relaxed text-zinc-500">
+											Mode dual menampilkan watermark utama pada 50% awal video
+											dan watermark kedua pada 50% akhir video.
+										</p>
 
 										{/* Watermark 2 Type Selector */}
 										<div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950 rounded-lg border border-zinc-855">
@@ -799,7 +1165,12 @@ export default function WatermarkPage() {
 
 										{watermarkType2 === "text" ? (
 											<div className="flex flex-col gap-2">
-												<Label htmlFor="wm-text2" className="text-xs text-zinc-400">Konten Teks 2</Label>
+												<Label
+													htmlFor="wm-text2"
+													className="text-xs text-zinc-400"
+												>
+													Konten Teks 2
+												</Label>
 												<Input
 													id="wm-text2"
 													value={watermarkText2}
@@ -810,11 +1181,13 @@ export default function WatermarkPage() {
 											</div>
 										) : (
 											<div className="flex flex-col gap-2">
-												<Label className="text-xs text-zinc-400">Berkas Logo 2 (PNG Transparan)</Label>
+												<Label className="text-xs text-zinc-400">
+													Berkas Logo 2 (PNG Transparan)
+												</Label>
 												<input
 													type="file"
 													ref={logoInputRef2}
-													accept="image/png"
+													accept="image/*"
 													className="hidden"
 													onChange={handleLogoUpload2}
 												/>
@@ -838,22 +1211,26 @@ export default function WatermarkPage() {
 
 										{/* Position grid selector 2 */}
 										<div className="flex flex-col gap-3 border-t border-zinc-850/50 pt-3">
-											<Label className="text-xs text-zinc-400">Posisi Akhir</Label>
+											<Label className="text-xs text-zinc-400">
+												Posisi Akhir
+											</Label>
 											<div className="grid grid-cols-5 gap-1.5 bg-zinc-950 p-2 rounded-lg border border-zinc-850 self-start">
-												{(["tl", "tr", "c", "bl", "br"] as const).map((preset) => (
-													<button
-														key={preset}
-														type="button"
-														onClick={() => applyPreset2(preset)}
-														className={`text-[9px] uppercase font-bold py-1.5 px-2.5 rounded border transition-all ${
-															positionPreset2 === preset
-																? "bg-indigo-600/20 border-indigo-500 text-indigo-400"
-																: "border-zinc-855 hover:border-zinc-700 bg-zinc-900 text-zinc-400"
-														}`}
-													>
-														{preset}
-													</button>
-												))}
+												{(["tl", "tr", "c", "bl", "br"] as const).map(
+													(preset) => (
+														<button
+															key={preset}
+															type="button"
+															onClick={() => applyPreset2(preset)}
+															className={`text-[9px] uppercase font-bold py-1.5 px-2.5 rounded border transition-all ${
+																positionPreset2 === preset
+																	? "bg-indigo-600/20 border-indigo-500 text-indigo-400"
+																	: "border-zinc-855 hover:border-zinc-700 bg-zinc-900 text-zinc-400"
+															}`}
+														>
+															{preset}
+														</button>
+													),
+												)}
 											</div>
 										</div>
 									</div>
@@ -862,8 +1239,12 @@ export default function WatermarkPage() {
 								{/* Opacity Slider */}
 								<div className="flex flex-col gap-2 border-t border-zinc-850/50 pt-4">
 									<div className="flex justify-between items-center">
-										<Label className="text-xs text-zinc-400">Transparansi Watermark</Label>
-										<span className="text-xs font-mono font-bold text-blue-400">{opacity}%</span>
+										<Label className="text-xs text-zinc-400">
+											Transparansi Watermark
+										</Label>
+										<span className="text-xs font-mono font-bold text-blue-400">
+											{opacity}%
+										</span>
 									</div>
 									<Slider
 										value={[opacity]}
@@ -875,52 +1256,71 @@ export default function WatermarkPage() {
 									/>
 								</div>
 
-
 								{/* Position grid selector */}
 								<div className="flex flex-col gap-3 border-t border-zinc-850/50 pt-4">
-									<Label className="text-xs text-zinc-400">Posisi Watermark</Label>
+									<Label className="text-xs text-zinc-400">
+										Posisi Watermark
+									</Label>
 									<div className="grid grid-cols-3 gap-2 w-40 bg-zinc-950 p-2 rounded-lg border border-zinc-850 self-start">
 										<button
 											type="button"
 											onClick={() => applyPreset("tl")}
 											className={`aspect-square w-full rounded border transition-all ${
-												positionPreset === "tl" ? "bg-blue-600/20 border-blue-500" : "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+												positionPreset === "tl"
+													? "bg-blue-600/20 border-blue-500"
+													: "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
 											}`}
 											title="Top Left"
 										/>
-										<div className="aspect-square w-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase font-mono">Top</div>
+										<div className="aspect-square w-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase font-mono">
+											Top
+										</div>
 										<button
 											type="button"
 											onClick={() => applyPreset("tr")}
 											className={`aspect-square w-full rounded border transition-all ${
-												positionPreset === "tr" ? "bg-blue-600/20 border-blue-500" : "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+												positionPreset === "tr"
+													? "bg-blue-600/20 border-blue-500"
+													: "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
 											}`}
 											title="Top Right"
 										/>
-										<div className="aspect-square w-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase font-mono">Mid L</div>
+										<div className="aspect-square w-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase font-mono">
+											Mid L
+										</div>
 										<button
 											type="button"
 											onClick={() => applyPreset("c")}
 											className={`aspect-square w-full rounded border transition-all ${
-												positionPreset === "c" ? "bg-blue-600/20 border-blue-500" : "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+												positionPreset === "c"
+													? "bg-blue-600/20 border-blue-500"
+													: "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
 											}`}
 											title="Center"
 										/>
-										<div className="aspect-square w-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase font-mono">Mid R</div>
+										<div className="aspect-square w-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase font-mono">
+											Mid R
+										</div>
 										<button
 											type="button"
 											onClick={() => applyPreset("bl")}
 											className={`aspect-square w-full rounded border transition-all ${
-												positionPreset === "bl" ? "bg-blue-600/20 border-blue-500" : "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+												positionPreset === "bl"
+													? "bg-blue-600/20 border-blue-500"
+													: "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
 											}`}
 											title="Bottom Left"
 										/>
-										<div className="aspect-square w-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase font-mono">Btm</div>
+										<div className="aspect-square w-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase font-mono">
+											Btm
+										</div>
 										<button
 											type="button"
 											onClick={() => applyPreset("br")}
 											className={`aspect-square w-full rounded border transition-all ${
-												positionPreset === "br" ? "bg-blue-600/20 border-blue-500" : "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+												positionPreset === "br"
+													? "bg-blue-600/20 border-blue-500"
+													: "border-zinc-800 hover:border-zinc-700 bg-zinc-900"
 											}`}
 											title="Bottom Right"
 										/>
@@ -955,7 +1355,14 @@ export default function WatermarkPage() {
 									{queue.map((item) => (
 										<div
 											key={item.id}
-											onClick={() => !isProcessingBatch && setActiveVideoId(item.id)}
+											onClick={() =>
+												!isProcessingBatch && setActiveVideoId(item.id)
+											}
+											onKeyDown={(event) =>
+												handleQueueItemKeyDown({ id: item.id, event })
+											}
+											role="button"
+											tabIndex={isProcessingBatch ? -1 : 0}
 											className={`p-3.5 rounded-xl border flex items-center gap-3.5 cursor-pointer relative group transition-all duration-200 ${
 												activeVideoId === item.id
 													? "border-blue-600/80 bg-blue-600/5"
@@ -1007,13 +1414,18 @@ export default function WatermarkPage() {
 													<AlertTriangle size={16} className="text-red-500" />
 												)}
 												{item.status === "done" && (
-													<Check size={16} className="text-green-500 animate-pulse" />
+													<Check
+														size={16}
+														className="text-green-500 animate-pulse"
+													/>
 												)}
-												
+
 												{!isProcessingBatch && (
 													<button
 														type="button"
-														onClick={(e) => removeVideo(item.id, e)}
+														onClick={(event) =>
+															removeVideo({ id: item.id, event })
+														}
 														className="p-1.5 text-zinc-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
 														title="Hapus"
 													>
@@ -1027,27 +1439,42 @@ export default function WatermarkPage() {
 
 								{/* Bottom Queue Action Buttons */}
 								<div className="border-t border-zinc-900 pt-4 flex flex-col gap-3">
-									<Button
-										type="button"
-										onClick={startBatchProcess}
-										disabled={
-											isProcessingBatch || 
-											queue.filter((q) => q.status !== "done").length === 0
-										}
-										className="w-full bg-blue-600 hover:bg-blue-500 font-bold gap-2 text-xs h-10 shadow-lg shadow-blue-500/10"
-									>
-										{isProcessingBatch ? (
-											<>
-												<Spinner size="sm" className="mr-1" />
-												Bakar Watermark...
-											</>
-										) : (
-											<>
-												<Play size={14} fill="currentColor" />
-												Proses {queue.filter((q) => q.status !== "done").length} Video
-											</>
-										)}
-									</Button>
+									{isProcessingBatch ? (
+										<Button
+											type="button"
+											variant="outline"
+											onClick={requestCancelProcessing}
+											disabled={cancelRequested}
+											className="w-full border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 font-bold gap-2 text-xs h-10"
+										>
+											{cancelRequested ? (
+												<>
+													<Spinner size="sm" className="mr-1" />
+													Menunggu video saat ini selesai...
+												</>
+											) : (
+												<>
+													<Square size={12} fill="currentColor" />
+													Hentikan Setelah Video Ini
+												</>
+											)}
+										</Button>
+									) : (
+										<Button
+											type="button"
+											onClick={startBatchProcess}
+											disabled={
+												queue.filter((q) => q.status !== "done").length === 0
+											}
+											className="w-full bg-blue-600 hover:bg-blue-500 font-bold gap-2 text-xs h-10 shadow-lg shadow-blue-500/10"
+										>
+											<Play size={14} fill="currentColor" />
+											Proses {
+												queue.filter((q) => q.status !== "done").length
+											}{" "}
+											Video
+										</Button>
+									)}
 
 									{queue.filter((q) => q.status === "done").length > 0 && (
 										<Button
