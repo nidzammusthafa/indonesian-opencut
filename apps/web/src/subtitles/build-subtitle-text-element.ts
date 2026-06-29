@@ -7,6 +7,7 @@ import {
 import { DEFAULTS } from "@/timeline/defaults";
 import { mediaTimeFromSeconds } from "@/wasm";
 import type { CreateTextElement } from "@/timeline";
+import type { ParamValue, ParamValues } from "@/params";
 import type { TextBackground } from "@/text/background";
 import type { TextStroke } from "@/text/stroke";
 import type {
@@ -18,7 +19,7 @@ import type {
 import type { SubtitleCue, SubtitleStyleOverrides } from "./types";
 
 const SUBTITLE_MAX_WIDTH_RATIO = 0.8;
-const SUBTITLE_BOTTOM_MARGIN_RATIO = 0.05;
+const SUBTITLE_BOTTOM_MARGIN_RATIO = 0.15;
 const SUBTITLE_FONT_SIZE = 5;
 const MEASUREMENT_CANVAS_SIZE = 4096;
 
@@ -145,6 +146,140 @@ function measureWrappedTextBlock({
 	};
 }
 
+function isParamValue(value: unknown): value is ParamValue {
+	return (
+		typeof value === "string" ||
+		typeof value === "number" ||
+		typeof value === "boolean"
+	);
+}
+
+function readSavedCaptionStyle(): ParamValues {
+	if (typeof window === "undefined") return {};
+	const saved = localStorage.getItem("default-caption-style");
+	if (!saved) return {};
+
+	try {
+		const parsed: unknown = JSON.parse(saved);
+		const values: ParamValues = {};
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			return values;
+		}
+
+		for (const [key, value] of Object.entries(parsed)) {
+			if (isParamValue(value)) {
+				values[key] = value;
+			}
+		}
+		return values;
+	} catch (_e) {
+		return {};
+	}
+}
+
+function readSavedNumber({
+	style,
+	key,
+	fallback,
+}: {
+	style: ParamValues;
+	key: string;
+	fallback: number;
+}): number {
+	const value = style[key];
+	return typeof value === "number" ? value : fallback;
+}
+
+function readSavedString({
+	style,
+	key,
+	fallback,
+}: {
+	style: ParamValues;
+	key: string;
+	fallback: string;
+}): string {
+	const value = style[key];
+	return typeof value === "string" ? value : fallback;
+}
+
+function readSavedBoolean({
+	style,
+	key,
+	fallback,
+}: {
+	style: ParamValues;
+	key: string;
+	fallback: boolean;
+}): boolean {
+	const value = style[key];
+	return typeof value === "boolean" ? value : fallback;
+}
+
+function readSavedTextAlign({
+	style,
+	key,
+	fallback,
+}: {
+	style: ParamValues;
+	key: string;
+	fallback: TextAlign;
+}): TextAlign {
+	const value = style[key];
+	if (value === "left" || value === "center" || value === "right") {
+		return value;
+	}
+	return fallback;
+}
+
+function readSavedFontWeight({
+	style,
+	key,
+	fallback,
+}: {
+	style: ParamValues;
+	key: string;
+	fallback: TextFontWeight;
+}): TextFontWeight {
+	const value = style[key];
+	if (value === "normal" || value === "bold") {
+		return value;
+	}
+	return fallback;
+}
+
+function readSavedFontStyle({
+	style,
+	key,
+	fallback,
+}: {
+	style: ParamValues;
+	key: string;
+	fallback: TextFontStyle;
+}): TextFontStyle {
+	const value = style[key];
+	if (value === "normal" || value === "italic") {
+		return value;
+	}
+	return fallback;
+}
+
+function readSavedTextDecoration({
+	style,
+	key,
+	fallback,
+}: {
+	style: ParamValues;
+	key: string;
+	fallback: TextDecoration;
+}): TextDecoration {
+	const value = style[key];
+	if (value === "none" || value === "underline" || value === "line-through") {
+		return value;
+	}
+	return fallback;
+}
+
 function resolveSubtitleStyle({
 	style,
 }: {
@@ -166,62 +301,208 @@ function resolveSubtitleStyle({
 	highlightBorderColor: string;
 	highlightBorderWidth: number;
 	highlightFontSize: number | undefined;
+	transformPositionX: number | undefined;
+	transformPositionY: number | undefined;
+	transformScaleX: number;
+	transformScaleY: number;
+	transformRotate: number;
+	opacity: number;
+	blendMode: string;
 	placement: NonNullable<SubtitleStyleOverrides["placement"]>;
 } {
-	let savedStyle: any = {};
-	if (typeof window !== "undefined") {
-		const saved = localStorage.getItem("default-caption-style");
-		if (saved) {
-			try {
-				savedStyle = JSON.parse(saved);
-			} catch (e) {
-				// ignore
-			}
-		}
-	}
+	const savedStyle = readSavedCaptionStyle();
 
 	const fontSize =
 		style?.fontSizeRatioOfPlayHeight != null
 			? style.fontSizeRatioOfPlayHeight * FONT_SIZE_SCALE_REFERENCE
-			: (style?.fontSize ?? savedStyle.fontSize ?? SUBTITLE_FONT_SIZE);
+			: (style?.fontSize ??
+				readSavedNumber({
+					style: savedStyle,
+					key: "fontSize",
+					fallback: SUBTITLE_FONT_SIZE,
+				}));
 
 	return {
-		fontFamily: style?.fontFamily ?? savedStyle.fontFamily ?? "Arial",
+		fontFamily:
+			style?.fontFamily ??
+			readSavedString({
+				style: savedStyle,
+				key: "fontFamily",
+				fallback: "Arial",
+			}),
 		fontSize,
-		color: style?.color ?? savedStyle.color ?? "#ffffff",
-		textAlign: style?.textAlign ?? savedStyle.textAlign ?? "center",
-		fontWeight: style?.fontWeight ?? savedStyle.fontWeight ?? "bold",
-		fontStyle: style?.fontStyle ?? savedStyle.fontStyle ?? "normal",
-		textDecoration: style?.textDecoration ?? savedStyle.textDecoration ?? "none",
-		letterSpacing: style?.letterSpacing ?? savedStyle.letterSpacing ?? DEFAULTS.text.letterSpacing,
-		lineHeight: style?.lineHeight ?? savedStyle.lineHeight ?? DEFAULTS.text.lineHeight,
+		color:
+			style?.color ??
+			readSavedString({ style: savedStyle, key: "color", fallback: "#ffffff" }),
+		textAlign:
+			style?.textAlign ??
+			readSavedTextAlign({
+				style: savedStyle,
+				key: "textAlign",
+				fallback: "center",
+			}),
+		fontWeight:
+			style?.fontWeight ??
+			readSavedFontWeight({
+				style: savedStyle,
+				key: "fontWeight",
+				fallback: "bold",
+			}),
+		fontStyle:
+			style?.fontStyle ??
+			readSavedFontStyle({
+				style: savedStyle,
+				key: "fontStyle",
+				fallback: "normal",
+			}),
+		textDecoration:
+			style?.textDecoration ??
+			readSavedTextDecoration({
+				style: savedStyle,
+				key: "textDecoration",
+				fallback: "none",
+			}),
+		letterSpacing:
+			style?.letterSpacing ??
+			readSavedNumber({
+				style: savedStyle,
+				key: "letterSpacing",
+				fallback: DEFAULTS.text.letterSpacing,
+			}),
+		lineHeight:
+			style?.lineHeight ??
+			readSavedNumber({
+				style: savedStyle,
+				key: "lineHeight",
+				fallback: DEFAULTS.text.lineHeight,
+			}),
 		background: {
 			...DEFAULTS.text.background,
-			enabled: savedStyle["background.enabled"] ?? false,
-			color: savedStyle["background.color"] ?? DEFAULTS.text.background.color,
-			opacity: savedStyle["background.opacity"] ?? DEFAULTS.text.background.opacity,
-			cornerRadius: savedStyle["background.cornerRadius"] ?? DEFAULTS.text.background.cornerRadius,
-			paddingX: savedStyle["background.paddingX"] ?? DEFAULTS.text.background.paddingX,
-			paddingY: savedStyle["background.paddingY"] ?? DEFAULTS.text.background.paddingY,
-			offsetX: savedStyle["background.offsetX"] ?? DEFAULTS.text.background.offsetX,
-			offsetY: savedStyle["background.offsetY"] ?? DEFAULTS.text.background.offsetY,
+			enabled: readSavedBoolean({
+				style: savedStyle,
+				key: "background.enabled",
+				fallback: false,
+			}),
+			color: readSavedString({
+				style: savedStyle,
+				key: "background.color",
+				fallback: DEFAULTS.text.background.color,
+			}),
+			opacity: readSavedNumber({
+				style: savedStyle,
+				key: "background.opacity",
+				fallback: DEFAULTS.text.background.opacity,
+			}),
+			cornerRadius: readSavedNumber({
+				style: savedStyle,
+				key: "background.cornerRadius",
+				fallback: DEFAULTS.text.background.cornerRadius,
+			}),
+			paddingX: readSavedNumber({
+				style: savedStyle,
+				key: "background.paddingX",
+				fallback: DEFAULTS.text.background.paddingX,
+			}),
+			paddingY: readSavedNumber({
+				style: savedStyle,
+				key: "background.paddingY",
+				fallback: DEFAULTS.text.background.paddingY,
+			}),
+			offsetX: readSavedNumber({
+				style: savedStyle,
+				key: "background.offsetX",
+				fallback: DEFAULTS.text.background.offsetX,
+			}),
+			offsetY: readSavedNumber({
+				style: savedStyle,
+				key: "background.offsetY",
+				fallback: DEFAULTS.text.background.offsetY,
+			}),
 			...(style?.background ?? {}),
 		},
 		stroke: style?.stroke ?? {
-			enabled: savedStyle["stroke.enabled"] ?? false,
-			color: savedStyle["stroke.color"] ?? "#000000",
-			width: savedStyle["stroke.width"] ?? 2,
+			enabled: readSavedBoolean({
+				style: savedStyle,
+				key: "stroke.enabled",
+				fallback: false,
+			}),
+			color: readSavedString({
+				style: savedStyle,
+				key: "stroke.color",
+				fallback: "#000000",
+			}),
+			width: readSavedNumber({
+				style: savedStyle,
+				key: "stroke.width",
+				fallback: 2,
+			}),
 		},
-		highlightColor: style?.highlightColor ?? savedStyle.highlightColor ?? savedStyle["highlight.color"] ?? "#FACC15",
-		highlightEnabled: style?.highlightEnabled ?? savedStyle.highlightEnabled ?? savedStyle["highlight.enabled"] ?? false,
-		highlightBorderColor: savedStyle["highlight.borderColor"] ?? "#000000",
-		highlightBorderWidth: savedStyle["highlight.borderWidth"] ?? 0,
-		highlightFontSize: savedStyle["highlight.fontSize"] !== undefined ? parseFloat(savedStyle["highlight.fontSize"]) : undefined,
+		highlightColor:
+			style?.highlightColor ??
+			readSavedString({
+				style: savedStyle,
+				key: "highlight.color",
+				fallback: "#FACC15",
+			}),
+		highlightEnabled:
+			style?.highlightEnabled ??
+			readSavedBoolean({
+				style: savedStyle,
+				key: "highlight.enabled",
+				fallback: false,
+			}),
+		highlightBorderColor: readSavedString({
+			style: savedStyle,
+			key: "highlight.borderColor",
+			fallback: "#000000",
+		}),
+		highlightBorderWidth: readSavedNumber({
+			style: savedStyle,
+			key: "highlight.borderWidth",
+			fallback: 0,
+		}),
+		highlightFontSize:
+			typeof savedStyle["highlight.fontSize"] === "number"
+				? savedStyle["highlight.fontSize"]
+				: undefined,
+		transformPositionX:
+			typeof savedStyle["transform.positionX"] === "number"
+				? savedStyle["transform.positionX"]
+				: undefined,
+		transformPositionY:
+			typeof savedStyle["transform.positionY"] === "number"
+				? savedStyle["transform.positionY"]
+				: undefined,
+		transformScaleX: readSavedNumber({
+			style: savedStyle,
+			key: "transform.scaleX",
+			fallback: DEFAULTS.element.transform.scaleX,
+		}),
+		transformScaleY: readSavedNumber({
+			style: savedStyle,
+			key: "transform.scaleY",
+			fallback: DEFAULTS.element.transform.scaleY,
+		}),
+		transformRotate: readSavedNumber({
+			style: savedStyle,
+			key: "transform.rotate",
+			fallback: DEFAULTS.element.transform.rotate,
+		}),
+		opacity: readSavedNumber({
+			style: savedStyle,
+			key: "opacity",
+			fallback: DEFAULTS.element.opacity,
+		}),
+		blendMode: readSavedString({
+			style: savedStyle,
+			key: "blendMode",
+			fallback: DEFAULTS.element.blendMode,
+		}),
 		placement: {
-			verticalAlign: style?.placement?.verticalAlign ?? savedStyle.placement?.verticalAlign ?? "bottom",
-			marginLeftRatio: style?.placement?.marginLeftRatio ?? savedStyle.placement?.marginLeftRatio,
-			marginRightRatio: style?.placement?.marginRightRatio ?? savedStyle.placement?.marginRightRatio,
-			marginVerticalRatio: style?.placement?.marginVerticalRatio ?? savedStyle.placement?.marginVerticalRatio,
+			verticalAlign: style?.placement?.verticalAlign ?? "bottom",
+			marginLeftRatio: style?.placement?.marginLeftRatio,
+			marginRightRatio: style?.placement?.marginRightRatio,
+			marginVerticalRatio: style?.placement?.marginVerticalRatio,
 		},
 	};
 }
@@ -348,7 +629,7 @@ export function buildSubtitleTextElement({
 			text: caption.text,
 			maxWidth,
 		});
-		
+
 		let measurement = measureWrappedTextBlock({
 			ctx,
 			content,
@@ -367,9 +648,10 @@ export function buildSubtitleTextElement({
 			adjustedFontSize = Math.max(1, style.fontSize * scale);
 
 			// Re-measure with the new font size
-			const scaledFontSizePx = adjustedFontSize * (canvasSize.height / FONT_SIZE_SCALE_REFERENCE);
+			const scaledFontSizePx =
+				adjustedFontSize * (canvasSize.height / FONT_SIZE_SCALE_REFERENCE);
 			ctx.font = `${fontStyle} ${fontWeight} ${scaledFontSizePx}px ${fontFamily}, sans-serif`;
-			
+
 			measurement = measureWrappedTextBlock({
 				ctx,
 				content,
@@ -413,7 +695,8 @@ export function buildSubtitleTextElement({
 			lineHeight: style.lineHeight,
 			"background.enabled": style.background.enabled,
 			"background.color": style.background.color,
-			"background.opacity": style.background.opacity ?? DEFAULTS.text.background.opacity,
+			"background.opacity":
+				style.background.opacity ?? DEFAULTS.text.background.opacity,
 			"background.cornerRadius":
 				style.background.cornerRadius ?? DEFAULTS.text.background.cornerRadius,
 			"background.paddingX":
@@ -432,8 +715,13 @@ export function buildSubtitleTextElement({
 			"highlight.borderColor": style.highlightBorderColor,
 			"highlight.borderWidth": style.highlightBorderWidth,
 			"highlight.fontSize": style.highlightFontSize ?? 1,
-			"transform.positionX": positionX,
-			"transform.positionY": positionY,
+			"transform.positionX": style.transformPositionX ?? positionX,
+			"transform.positionY": style.transformPositionY ?? positionY,
+			"transform.scaleX": style.transformScaleX,
+			"transform.scaleY": style.transformScaleY,
+			"transform.rotate": style.transformRotate,
+			opacity: style.opacity,
+			blendMode: style.blendMode,
 		},
 	};
 }

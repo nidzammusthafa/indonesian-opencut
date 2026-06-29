@@ -39,10 +39,12 @@ export function ElementParamsTab({
 		startTime: element.startTime,
 		duration: element.duration,
 	});
-	const params = getElementParams({ element }).filter(
+	const allParams = getElementParams({ element });
+	const params = allParams.filter(
 		(param) => !paramKeys || paramKeys.includes(param.key),
 	);
 	const baseValues = buildValues({ element, params });
+	const allBaseValues = buildValues({ element, params: allParams });
 
 	const isTextElement = element.type === "text";
 	const isCaptionGlobalMode = useCaptionGlobalModeStore((s) => s.isGlobalMode);
@@ -50,20 +52,48 @@ export function ElementParamsTab({
 	const [applySuccess, setApplySuccess] = useState(false);
 	const handleSaveStyle = () => {
 		const styleParams = [
-			"fontFamily", "fontSize", "color", "textAlign", "fontWeight", "fontStyle", "textDecoration", "letterSpacing", "lineHeight",
-			"background.enabled", "background.color", "background.opacity", "background.cornerRadius", "background.paddingX", "background.paddingY", "background.offsetX", "background.offsetY",
-			"stroke.enabled", "stroke.color", "stroke.width",
-			"highlight.enabled", "highlight.color", "highlight.borderColor", "highlight.borderWidth", "highlight.fontSize"
+			"fontFamily",
+			"fontSize",
+			"color",
+			"textAlign",
+			"fontWeight",
+			"fontStyle",
+			"textDecoration",
+			"letterSpacing",
+			"lineHeight",
+			"background.enabled",
+			"background.color",
+			"background.opacity",
+			"background.cornerRadius",
+			"background.paddingX",
+			"background.paddingY",
+			"background.offsetX",
+			"background.offsetY",
+			"stroke.enabled",
+			"stroke.color",
+			"stroke.width",
+			"highlight.enabled",
+			"highlight.color",
+			"highlight.borderColor",
+			"highlight.borderWidth",
+			"highlight.fontSize",
+			"transform.positionX",
+			"transform.positionY",
+			"transform.scaleX",
+			"transform.scaleY",
+			"transform.rotate",
+			"opacity",
+			"blendMode",
 		];
-		const savedStyle: Record<string, any> = {};
+		const savedStyle: ParamValues = {};
 		for (const key of styleParams) {
-			const param = params.find(p => p.key === key);
+			const param = allParams.find((p) => p.key === key);
 			if (param) {
-				savedStyle[key] = baseValues[key] ?? param.default;
+				savedStyle[key] = allBaseValues[key] ?? param.default;
 			}
 		}
 		localStorage.setItem("default-caption-style", JSON.stringify(savedStyle));
-		
+
 		setSaveSuccess(true);
 		setTimeout(() => setSaveSuccess(false), 2000);
 	};
@@ -72,8 +102,8 @@ export function ElementParamsTab({
 		const saved = localStorage.getItem("default-caption-style");
 		if (!saved) return;
 		try {
-			const savedStyle = JSON.parse(saved);
-			const updates: Record<string, any> = {};
+			const savedStyle = parseSavedParamValues({ raw: saved });
+			const updates: ParamValues = {};
 			for (const [key, value] of Object.entries(savedStyle)) {
 				updates[key] = value;
 			}
@@ -81,7 +111,7 @@ export function ElementParamsTab({
 			const elementIds = [element.id];
 			if (isCaptionGlobalMode) {
 				const activeScene = editor.scenes.getActiveScene();
-				const track = activeScene.tracks.overlay.find(t => t.id === trackId);
+				const track = activeScene.tracks.overlay.find((t) => t.id === trackId);
 				if (track) {
 					for (const el of track.elements) {
 						if (el.id !== element.id) {
@@ -92,19 +122,19 @@ export function ElementParamsTab({
 			}
 
 			const command = new UpdateElementsCommand({
-				updates: elementIds.map(id => ({
+				updates: elementIds.map((id) => ({
 					elementId: id,
 					trackId,
 					patch: {
 						params: updates,
 					},
-				}))
+				})),
 			});
 			editor.command.execute({ command });
-			
+
 			setApplySuccess(true);
 			setTimeout(() => setApplySuccess(false), 2000);
-		} catch (e) {
+		} catch (_e) {
 			// ignore
 		}
 	};
@@ -250,6 +280,29 @@ function buildValues({
 		const value = readElementParamValue({ element, param });
 		if (value !== null) {
 			values[param.key] = value;
+		}
+	}
+	return values;
+}
+
+function isParamValue(value: unknown): value is ParamValue {
+	return (
+		typeof value === "string" ||
+		typeof value === "number" ||
+		typeof value === "boolean"
+	);
+}
+
+function parseSavedParamValues({ raw }: { raw: string }): ParamValues {
+	const parsed: unknown = JSON.parse(raw);
+	const values: ParamValues = {};
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		return values;
+	}
+
+	for (const [key, value] of Object.entries(parsed)) {
+		if (isParamValue(value)) {
+			values[key] = value;
 		}
 	}
 	return values;
