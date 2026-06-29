@@ -49,9 +49,13 @@ export function ElementParamsTab({
 		duration: element.duration,
 	});
 	const allParams = getElementParams({ element });
-	const params = allParams.filter(
-		(param) => !paramKeys || paramKeys.includes(param.key),
-	);
+	const isCaption = element.type === "text" && element.name.startsWith("Caption");
+	const params = allParams.filter((param) => {
+		if (!isCaption && param.key.startsWith("highlight.")) {
+			return false;
+		}
+		return !paramKeys || paramKeys.includes(param.key);
+	});
 	const baseValues = buildValues({ element, params });
 	const allBaseValues = buildValues({ element, params: allParams });
 
