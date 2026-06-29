@@ -15,6 +15,7 @@ export interface WatermarkOptions {
 	borderColor?: string;
 	imageFile?: File | null;
 	imageSize?: number;
+	imageOpacity?: number;
 
 	// Dual Watermark options
 	isDual?: boolean;
@@ -288,7 +289,9 @@ export const addWatermark = async ({
 		} else if (options.type === "image" && options.imageFile) {
 			const imageSize = options.imageSize || 15;
 			const targetLogoWidth = Math.round(vw * (imageSize / 100));
-			const op = ((options.opacity ?? 60) / 100).toFixed(2);
+			const op = (
+				(options.imageOpacity ?? options.opacity ?? 60) / 100
+			).toFixed(2);
 			const xFactor = (options.xPercent / 100).toFixed(3);
 			const yFactor = (options.yPercent / 100).toFixed(3);
 
@@ -334,7 +337,9 @@ export const addWatermark = async ({
 			} else if (type2 === "image" && options.imageFile2) {
 				const imageSize = options.imageSize || 15;
 				const targetLogoWidth = Math.round(vw * (imageSize / 100));
-				const op = ((options.opacity ?? 60) / 100).toFixed(2);
+				const op = (
+					(options.imageOpacity ?? options.opacity ?? 60) / 100
+				).toFixed(2);
 				const xFactor = (xPercent2 / 100).toFixed(3);
 				const yFactor = (yPercent2 / 100).toFixed(3);
 

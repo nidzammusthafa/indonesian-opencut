@@ -41,6 +41,8 @@ interface VideoQueueItem {
 	duration?: number;
 }
 
+type AspectRatioMode = "auto" | "16:9" | "9:16" | "1:1" | "4:3";
+
 const getVideoMetadata = (
 	file: File,
 ): Promise<{ width: number; height: number; duration: number }> => {
@@ -63,14 +65,64 @@ const getVideoMetadata = (
 	});
 };
 
+const getPreviewAspectRatio = ({
+	aspectRatio,
+	activeVideo,
+}: {
+	aspectRatio: AspectRatioMode;
+	activeVideo?: VideoQueueItem;
+}) => {
+	if (aspectRatio !== "auto") {
+		return aspectRatio.replace(":", " / ");
+	}
+	if (activeVideo?.width && activeVideo.height) {
+		return `${activeVideo.width} / ${activeVideo.height}`;
+	}
+	return "16 / 9";
+};
+
+const formatFileSize = (bytes: number) => {
+	if (bytes >= 1024 * 1024 * 1024) {
+		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+	}
+	if (bytes >= 1024 * 1024) {
+		return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+	}
+	if (bytes >= 1024) {
+		return `${(bytes / 1024).toFixed(1)} KB`;
+	}
+	return `${bytes} B`;
+};
+
+const getFileKey = (file: File) =>
+	`${file.name}:${file.size}:${file.lastModified}`;
+
+const SUPPORTED_WATERMARK_FONTS = [
+	"Inter",
+	"Arial",
+	"Georgia",
+	"Courier New",
+	"Impact",
+	"Comic Sans MS",
+	"Times New Roman",
+	"Roboto",
+	"Montserrat",
+	"Oswald",
+	"Poppins",
+	"Playfair Display",
+	"Bebas Neue",
+	"Pacifico",
+	"Lobster",
+	"Kanit",
+	"Open Sans",
+] as const;
+
 export default function WatermarkPage() {
 	const [queue, setQueue] = useState<VideoQueueItem[]>([]);
 	const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
 	// Aspect ratio config
-	const [aspectRatio, setAspectRatio] = useState<
-		"16:9" | "9:16" | "1:1" | "4:3"
-	>("16:9");
+	const [aspectRatio, setAspectRatio] = useState<AspectRatioMode>("auto");
 
 	// Watermark 1 configuration
 	const [watermarkType, setWatermarkType] = useState<"text" | "image">("text");
@@ -84,6 +136,7 @@ export default function WatermarkPage() {
 	const [logoFile, setLogoFile] = useState<File | null>(null);
 	const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
 	const [logoSize, setLogoSize] = useState(15);
+	const [logoOpacity, setLogoOpacity] = useState(60);
 
 	// Position 1 configuration
 	const [positionPreset, setPositionPreset] = useState<
@@ -212,6 +265,9 @@ export default function WatermarkPage() {
 	const handleFiles = useCallback(
 		async (files: FileList) => {
 			const newItems: VideoQueueItem[] = [];
+			const seenFileKeys = new Set(
+				queueRef.current.map((item) => getFileKey(item.file)),
+			);
 			let skippedFiles = 0;
 			for (let i = 0; i < files.length; i++) {
 				const file = files[i];
@@ -219,6 +275,11 @@ export default function WatermarkPage() {
 					skippedFiles += 1;
 					continue;
 				}
+				const fileKey = getFileKey(file);
+				if (seenFileKeys.has(fileKey)) {
+					continue;
+				}
+				seenFileKeys.add(fileKey);
 
 				try {
 					const meta = await getVideoMetadata(file);
@@ -307,15 +368,18 @@ export default function WatermarkPage() {
 
 	const onDragOver = (e: React.DragEvent) => {
 		e.preventDefault();
+		e.stopPropagation();
 		setIsDragActive(true);
 	};
 
-	const onDragLeave = () => {
+	const onDragLeave = (e: React.DragEvent) => {
+		e.stopPropagation();
 		setIsDragActive(false);
 	};
 
 	const onDrop = (e: React.DragEvent) => {
 		e.preventDefault();
+		e.stopPropagation();
 		setIsDragActive(false);
 		if (e.dataTransfer.files) {
 			handleFiles(e.dataTransfer.files);
@@ -501,6 +565,7 @@ export default function WatermarkPage() {
 				borderColor,
 				imageFile: logoFile,
 				imageSize: logoSize,
+				imageOpacity: logoOpacity,
 
 				// Dual Options
 				isDual,
@@ -633,6 +698,13 @@ export default function WatermarkPage() {
 	};
 
 	const activeVideo = queue.find((v) => v.id === activeVideoId);
+	const previewAspectRatio = getPreviewAspectRatio({
+		aspectRatio,
+		activeVideo,
+	});
+	const isSelectedFontSupported = SUPPORTED_WATERMARK_FONTS.some(
+		(font) => font === fontFamily,
+	);
 
 	// Load Google Fonts dynamically for previews
 	useEffect(() => {
@@ -648,16 +720,6 @@ export default function WatermarkPage() {
 			}
 		}
 	}, []);
-
-	// Aspect ratio class helper
-	const aspectClass =
-		aspectRatio === "16:9"
-			? "aspect-video"
-			: aspectRatio === "9:16"
-				? "aspect-[9/16]"
-				: aspectRatio === "1:1"
-					? "aspect-square"
-					: "aspect-[4/3]";
 
 	return (
 		<div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-blue-200">
@@ -759,27 +821,30 @@ export default function WatermarkPage() {
 									</h3>
 									{/* Aspect Ratio Selector */}
 									<div className="flex items-center gap-1.5 bg-zinc-950 p-1 border border-zinc-850 rounded-lg">
-										{(["16:9", "9:16", "1:1", "4:3"] as const).map((r) => (
-											<button
-												key={r}
-												type="button"
-												onClick={() => setAspectRatio(r)}
-												className={`text-[9px] font-bold px-2 py-1 rounded transition-colors ${
-													aspectRatio === r
-														? "bg-blue-600 text-white"
-														: "text-zinc-500 hover:text-white"
-												}`}
-											>
-												{r}
-											</button>
-										))}
+										{(["auto", "16:9", "9:16", "1:1", "4:3"] as const).map(
+											(r) => (
+												<button
+													key={r}
+													type="button"
+													onClick={() => setAspectRatio(r)}
+													className={`text-[9px] font-bold px-2 py-1 rounded transition-colors ${
+														aspectRatio === r
+															? "bg-blue-600 text-white"
+															: "text-zinc-500 hover:text-white"
+													}`}
+												>
+													{r === "auto" ? "Auto" : r}
+												</button>
+											),
+										)}
 									</div>
 								</div>
 
 								{activeVideo ? (
 									<div
 										ref={previewContainerRef}
-										className={`relative ${aspectClass} w-full bg-black rounded-lg overflow-hidden border border-zinc-850 shadow-inner group select-none`}
+										className="relative w-full bg-black rounded-lg overflow-hidden border border-zinc-850 shadow-inner group select-none"
+										style={{ aspectRatio: previewAspectRatio }}
 									>
 										<video
 											ref={videoRef}
@@ -832,7 +897,7 @@ export default function WatermarkPage() {
 														style={{
 															width: `${Math.round((activeVideo.width || 1920) * (logoSize / 100) * scaleFactor)}px`,
 															height: "auto",
-															opacity: opacity / 100,
+															opacity: logoOpacity / 100,
 														}}
 													/>
 													{isDual && (
@@ -866,7 +931,7 @@ export default function WatermarkPage() {
 															fontFamily: fontFamily,
 															fontSize: `${fontSize * scaleFactor}px`,
 															color: fontColor,
-															opacity: opacity / 100,
+															opacity: logoOpacity / 100,
 															fontWeight: "bold",
 															whiteSpace: "nowrap",
 															textShadow:
@@ -999,6 +1064,13 @@ export default function WatermarkPage() {
 													onValueChange={setFontFamily}
 													className="h-9 bg-zinc-950 border-zinc-850 text-xs text-white"
 												/>
+												{!isSelectedFontSupported && (
+													<p className="text-[10px] leading-relaxed text-amber-300/90">
+														Preview memakai font pilihan. Output FFmpeg akan
+														fallback ke Inter karena font ini belum didukung
+														encoder watermark.
+													</p>
+												)}
 											</div>
 
 											<div className="flex flex-col gap-2">
@@ -1236,25 +1308,49 @@ export default function WatermarkPage() {
 									</div>
 								)}
 
-								{/* Opacity Slider */}
-								<div className="flex flex-col gap-2 border-t border-zinc-850/50 pt-4">
-									<div className="flex justify-between items-center">
-										<Label className="text-xs text-zinc-400">
-											Transparansi Watermark
-										</Label>
-										<span className="text-xs font-mono font-bold text-blue-400">
-											{opacity}%
-										</span>
+								{(watermarkType === "text" ||
+									(isDual && watermarkType2 === "text")) && (
+									<div className="flex flex-col gap-2 border-t border-zinc-850/50 pt-4">
+										<div className="flex justify-between items-center">
+											<Label className="text-xs text-zinc-400">
+												Transparansi Teks
+											</Label>
+											<span className="text-xs font-mono font-bold text-blue-400">
+												{opacity}%
+											</span>
+										</div>
+										<Slider
+											value={[opacity]}
+											onValueChange={(val) => setOpacity(val[0])}
+											min={10}
+											max={100}
+											step={5}
+											className="my-1.5"
+										/>
 									</div>
-									<Slider
-										value={[opacity]}
-										onValueChange={(val) => setOpacity(val[0])}
-										min={10}
-										max={100}
-										step={5}
-										className="my-1.5"
-									/>
-								</div>
+								)}
+
+								{(watermarkType === "image" ||
+									(isDual && watermarkType2 === "image")) && (
+									<div className="flex flex-col gap-2 border-t border-zinc-850/50 pt-4">
+										<div className="flex justify-between items-center">
+											<Label className="text-xs text-zinc-400">
+												Opasitas Logo
+											</Label>
+											<span className="text-xs font-mono font-bold text-blue-400">
+												{logoOpacity}%
+											</span>
+										</div>
+										<Slider
+											value={[logoOpacity]}
+											onValueChange={(val) => setLogoOpacity(val[0])}
+											min={10}
+											max={100}
+											step={5}
+											className="my-1.5"
+										/>
+									</div>
+								)}
 
 								{/* Position grid selector */}
 								<div className="flex flex-col gap-3 border-t border-zinc-850/50 pt-4">
@@ -1378,7 +1474,10 @@ export default function WatermarkPage() {
 													{item.file.name}
 												</h4>
 												<p className="text-[10px] text-zinc-500 font-mono mt-1">
-													{(item.file.size / (1024 * 1024)).toFixed(1)} MB
+													{formatFileSize(item.file.size)}
+													{item.width && item.height
+														? ` · ${item.width}x${item.height}`
+														: ""}
 												</p>
 
 												{/* Progress Bar inside Queue List */}
