@@ -11,7 +11,8 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "in",
 		defaultDuration: 0.4,
 		properties: [
-			{ propertyPath: "opacity", absoluteStart: 0, absoluteEnd: 1 },
+			// Start: 0, End: baseValue (dynamic user opacity)
+			{ propertyPath: "opacity", absoluteStart: 0 },
 		],
 	},
 	{
@@ -56,8 +57,9 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "in",
 		defaultDuration: 0.4,
 		properties: [
-			{ propertyPath: "transform.scaleX", absoluteStart: 0.5, absoluteEnd: 1 },
-			{ propertyPath: "transform.scaleY", absoluteStart: 0.5, absoluteEnd: 1 },
+			// Start: 0.5 * baseValue, End: baseValue (dynamic user scale)
+			{ propertyPath: "transform.scaleX", multiplierStart: 0.5 },
+			{ propertyPath: "transform.scaleY", multiplierStart: 0.5 },
 		],
 	},
 	{
@@ -66,8 +68,9 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "in",
 		defaultDuration: 0.4,
 		properties: [
-			{ propertyPath: "transform.scaleX", absoluteStart: 1.5, absoluteEnd: 1 },
-			{ propertyPath: "transform.scaleY", absoluteStart: 1.5, absoluteEnd: 1 },
+			// Start: 1.5 * baseValue, End: baseValue (dynamic user scale)
+			{ propertyPath: "transform.scaleX", multiplierStart: 1.5 },
+			{ propertyPath: "transform.scaleY", multiplierStart: 1.5 },
 		],
 	},
 	{
@@ -76,7 +79,7 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "in",
 		defaultDuration: 0.5,
 		properties: [
-			{ propertyPath: "opacity", absoluteStart: 0, absoluteEnd: 1 },
+			{ propertyPath: "opacity", absoluteStart: 0 },
 			{ propertyPath: "transform.positionY", offsetStart: 80, offsetEnd: 0 },
 		],
 	},
@@ -86,9 +89,9 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "in",
 		defaultDuration: 0.5,
 		properties: [
-			{ propertyPath: "opacity", absoluteStart: 0, absoluteEnd: 1 },
-			{ propertyPath: "transform.scaleX", absoluteStart: 0.5, absoluteEnd: 1 },
-			{ propertyPath: "transform.scaleY", absoluteStart: 0.5, absoluteEnd: 1 },
+			{ propertyPath: "opacity", absoluteStart: 0 },
+			{ propertyPath: "transform.scaleX", multiplierStart: 0.5 },
+			{ propertyPath: "transform.scaleY", multiplierStart: 0.5 },
 		],
 	},
 	{
@@ -97,7 +100,7 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "in",
 		defaultDuration: 0.8,
 		properties: [
-			{ propertyPath: "opacity", absoluteStart: 0, absoluteEnd: 1 },
+			{ propertyPath: "opacity", absoluteStart: 0 },
 		],
 	},
 
@@ -108,7 +111,8 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "out",
 		defaultDuration: 0.3,
 		properties: [
-			{ propertyPath: "opacity", absoluteStart: 1, absoluteEnd: 0 },
+			// Start: baseValue, End: 0
+			{ propertyPath: "opacity", absoluteEnd: 0 },
 		],
 	},
 	{
@@ -153,8 +157,9 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "out",
 		defaultDuration: 0.3,
 		properties: [
-			{ propertyPath: "transform.scaleX", absoluteStart: 1, absoluteEnd: 0.5 },
-			{ propertyPath: "transform.scaleY", absoluteStart: 1, absoluteEnd: 0.5 },
+			// Start: baseValue, End: 0.5 * baseValue
+			{ propertyPath: "transform.scaleX", multiplierEnd: 0.5 },
+			{ propertyPath: "transform.scaleY", multiplierEnd: 0.5 },
 		],
 	},
 	{
@@ -163,7 +168,7 @@ export const TEXT_ANIMATION_PRESETS: TextAnimationPreset[] = [
 		direction: "out",
 		defaultDuration: 0.4,
 		properties: [
-			{ propertyPath: "opacity", absoluteStart: 1, absoluteEnd: 0 },
+			{ propertyPath: "opacity", absoluteEnd: 0 },
 			{ propertyPath: "transform.positionY", offsetStart: 0, offsetEnd: 80 },
 		],
 	},

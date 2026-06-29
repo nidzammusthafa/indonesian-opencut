@@ -144,8 +144,9 @@ export function ElementParamsTab({
 	};
 
 	const handleApplyCustomPreset = (preset: TextStylePreset) => {
+		const isCaption = element.type === "text" && element.name.startsWith("Caption");
 		const elementIds = [element.id];
-		if (isCaptionGlobalMode) {
+		if (isCaption && isCaptionGlobalMode) {
 			const activeScene = editor.scenes.getActiveScene();
 			const track = activeScene.tracks.overlay.find((t) => t.id === trackId);
 			if (track) {

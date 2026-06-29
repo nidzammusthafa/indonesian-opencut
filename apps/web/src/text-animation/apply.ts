@@ -1,12 +1,18 @@
 import type { TimelineElement } from "@/timeline";
-import type { ElementAnimations, ScalarAnimationChannel, ScalarAnimationKey } from "@/animation/types";
+import type { ElementAnimations, ScalarAnimationKey } from "@/animation/types";
 import { mediaTimeFromSeconds, mediaTimeToSeconds } from "@/wasm";
 import { generateUUID } from "@/utils/id";
 import { getCurveHandlesForNormalizedCubicBezier } from "@/animation/curve-bridge";
-import type { PropertyAnimationDef, TextAnimationPreset } from "./types";
+import type { PropertyAnimationDef } from "./types";
 import { CUBIC_BEZIER_IN, CUBIC_BEZIER_OUT, TEXT_ANIMATION_PRESETS } from "./presets";
 
-function getPropertyBaseValue(element: TimelineElement, propertyPath: string): number {
+function getPropertyBaseValue({
+	element,
+	propertyPath,
+}: {
+	element: TimelineElement;
+	propertyPath: string;
+}): number {
 	const val = element.params[propertyPath];
 	if (typeof val === "number") {
 		return val;
@@ -17,13 +23,23 @@ function getPropertyBaseValue(element: TimelineElement, propertyPath: string): n
 	return 0;
 }
 
-function getPropertyValue(baseValue: number, def: PropertyAnimationDef, position: "start" | "end"): number {
+function getPropertyValue({
+	baseValue,
+	def,
+	position,
+}: {
+	baseValue: number;
+	def: PropertyAnimationDef;
+	position: "start" | "end";
+}): number {
 	if (position === "start") {
 		if (def.absoluteStart !== undefined) return def.absoluteStart;
+		if (def.multiplierStart !== undefined) return baseValue * def.multiplierStart;
 		if (def.offsetStart !== undefined) return baseValue + def.offsetStart;
 		return baseValue;
 	} else {
 		if (def.absoluteEnd !== undefined) return def.absoluteEnd;
+		if (def.multiplierEnd !== undefined) return baseValue * def.multiplierEnd;
 		if (def.offsetEnd !== undefined) return baseValue + def.offsetEnd;
 		return baseValue;
 	}
@@ -93,7 +109,7 @@ export function applyTextAnimations({
 
 	// Generate keyframes for each affected property
 	for (const propertyPath of allAffectedProperties) {
-		const baseValue = getPropertyBaseValue(element, propertyPath);
+		const baseValue = getPropertyBaseValue({ element, propertyPath });
 		const propIn = presetIn?.properties.find((p) => p.propertyPath === propertyPath);
 		const propOut = presetOut?.properties.find((p) => p.propertyPath === propertyPath);
 
@@ -101,10 +117,10 @@ export function applyTextAnimations({
 
 		if (propIn && propOut) {
 			// Both IN and OUT presets affect this property
-			const valInStart = getPropertyValue(baseValue, propIn, "start");
-			const valInEnd = getPropertyValue(baseValue, propIn, "end");
-			const valOutStart = getPropertyValue(baseValue, propOut, "start");
-			const valOutEnd = getPropertyValue(baseValue, propOut, "end");
+			const valInStart = getPropertyValue({ baseValue, def: propIn, position: "start" });
+			const valInEnd = getPropertyValue({ baseValue, def: propIn, position: "end" });
+			const valOutStart = getPropertyValue({ baseValue, def: propOut, position: "start" });
+			const valOutEnd = getPropertyValue({ baseValue, def: propOut, position: "end" });
 
 			// Key 1: In Start (time 0)
 			const key1: ScalarAnimationKey = {
@@ -169,8 +185,8 @@ export function applyTextAnimations({
 			keys.push(key1, key2, key3, key4);
 		} else if (propIn) {
 			// Only IN preset affects this property
-			const valInStart = getPropertyValue(baseValue, propIn, "start");
-			const valInEnd = getPropertyValue(baseValue, propIn, "end");
+			const valInStart = getPropertyValue({ baseValue, def: propIn, position: "start" });
+			const valInEnd = getPropertyValue({ baseValue, def: propIn, position: "end" });
 
 			const key1: ScalarAnimationKey = {
 				id: generateUUID(),
@@ -202,8 +218,8 @@ export function applyTextAnimations({
 			keys.push(key1, key2);
 		} else if (propOut) {
 			// Only OUT preset affects this property
-			const valOutStart = getPropertyValue(baseValue, propOut, "start");
-			const valOutEnd = getPropertyValue(baseValue, propOut, "end");
+			const valOutStart = getPropertyValue({ baseValue, def: propOut, position: "start" });
+			const valOutEnd = getPropertyValue({ baseValue, def: propOut, position: "end" });
 
 			const key1: ScalarAnimationKey = {
 				id: generateUUID(),

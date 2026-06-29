@@ -43,7 +43,7 @@ export class UpdateElementsCommand extends Command {
 						if (!track) continue;
 
 						const element = track.elements.find((el) => el.id === update.elementId);
-						if (element && element.type === "text") {
+						if (element && element.type === "text" && element.name.startsWith("Caption")) {
 							const siblings = track.elements.filter((el) => el.id !== element.id);
 							for (const sibling of siblings) {
 								const siblingPatch: Partial<TimelineElement> = {};

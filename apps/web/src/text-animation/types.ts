@@ -1,5 +1,3 @@
-import type { TimelineElement } from "@/timeline";
-
 export type TextAnimationDirection = "in" | "out";
 
 export interface PropertyAnimationDef {
@@ -10,6 +8,9 @@ export interface PropertyAnimationDef {
 	// Or offsets from the base value
 	offsetStart?: number;
 	offsetEnd?: number;
+	// Or multiplier of the base value (useful for relative scale/opacity)
+	multiplierStart?: number;
+	multiplierEnd?: number;
 }
 
 export interface TextAnimationPreset {
