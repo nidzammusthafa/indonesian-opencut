@@ -38,15 +38,6 @@ export function insertCaptionChunksAsTextTrack({
 		return null;
 	}
 
-	// Find and remove existing text tracks in active scene to avoid overlapping captions
-	const activeScene = editor.scenes.getActiveScene();
-	const existingTextTracks = activeScene.tracks.overlay.filter(
-		(track) => track.type === "text",
-	);
-	const removeTrackCommands = existingTextTracks.map(
-		(track) => new RemoveTrackCommand(track.id),
-	);
-
 	const addTrackCommand = new AddTrackCommand({ type: "text", index: 0 });
 	const trackId = addTrackCommand.getTrackId();
 	const canvasSize = editor.project.getActive().settings.canvasSize;
@@ -63,7 +54,6 @@ export function insertCaptionChunksAsTextTrack({
 	);
 	editor.command.execute({
 		command: new BatchCommand([
-			...removeTrackCommands,
 			addTrackCommand,
 			...insertCommands,
 		]),

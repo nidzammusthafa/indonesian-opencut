@@ -827,8 +827,6 @@ export class TimelineManager {
 	}
 
 	private applyPreviewOverlay(tracks: SceneTracks): SceneTracks {
-		if (this.previewOverlay.size === 0) return tracks;
-
 		const applyTrackOverlay = <TTrack extends TimelineTrack>(
 			track: TTrack,
 		): TTrack => {
@@ -855,11 +853,13 @@ export class TimelineManager {
 			return { ...track, elements: nextElements } as TTrack;
 		};
 
-		return {
+		const overlayTracks = {
 			overlay: tracks.overlay.map((track) => applyTrackOverlay(track)),
 			main: applyTrackOverlay(tracks.main),
 			audio: tracks.audio.map((track) => applyTrackOverlay(track)),
 		};
+
+		return this.packTracks(overlayTracks);
 	}
 
 	duplicateElements({
@@ -996,6 +996,13 @@ export class TimelineManager {
 		this.previewOverlay.clear();
 		this.previewTracks = null;
 
+		const packedTracks = this.packTracks(newTracks);
+
+		this.editor.scenes.updateSceneTracks({ tracks: packedTracks });
+		this.notify();
+	}
+
+	private packTracks(newTracks: SceneTracks): SceneTracks {
 		// 1. Resolve overlaps on the main track by shifting overlapping elements to the left or right
 		// of the clip they overlap, depending on which side they lean towards.
 		const mainTrack = newTracks.main;
@@ -1128,13 +1135,10 @@ export class TimelineManager {
 			return { ...track, elements: mappedElements } as TTrack;
 		};
 
-		const packedTracks: SceneTracks = {
+		return {
 			overlay: newTracks.overlay.map((track) => mapTrackElements(track)),
 			main: mapTrackElements({ ...mainTrack, elements: mainElements }),
 			audio: newTracks.audio.map((track) => mapTrackElements(track)),
 		};
-
-		this.editor.scenes.updateSceneTracks({ tracks: packedTracks });
-		this.notify();
 	}
 }
