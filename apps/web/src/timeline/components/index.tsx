@@ -30,7 +30,7 @@ import {
 	type ReactNode,
 } from "react";
 import { useContainerSize } from "@/hooks/use-container-size";
-import type { MediaTime } from "@/wasm";
+import { type MediaTime, TICKS_PER_SECOND } from "@/wasm";
 import type { ElementDragView, DropTarget } from "@/timeline";
 import { TimelineTrackContent } from "./timeline-track";
 import { TimelinePlayhead } from "./timeline-playhead";
@@ -46,6 +46,7 @@ import {
 	TIMELINE_TRACK_LABELS_COLUMN_WIDTH_PX,
 	KEYFRAME_LANE_HEIGHT_PX,
 } from "./layout";
+import { BASE_TIMELINE_PIXELS_PER_SECOND, TIMELINE_ZOOM_MAX } from "@/timeline/scale";
 import { useElementInteraction } from "@/timeline/hooks/element/use-element-interaction";
 import {
 	canTrackHaveAudio,
@@ -183,6 +184,29 @@ export function Timeline() {
 			tracksScrollRef,
 			rulerScrollRef,
 		});
+
+	// Enforce that when the first clip is inserted, the zoom is set to occupy half of the timeline width
+	const firstElementId = scene?.tracks.main.elements[0]?.id;
+	const firstElementDuration = scene?.tracks.main.elements[0]?.duration;
+	const [prevFirstElementId, setPrevFirstElementId] = useState<string | undefined>(undefined);
+
+	useEffect(() => {
+		if (firstElementId && firstElementId !== prevFirstElementId && firstElementDuration) {
+			setPrevFirstElementId(firstElementId);
+			const viewportWidth = tracksViewportWidth || (containerWidth - TIMELINE_TRACK_LABELS_COLUMN_WIDTH_PX);
+			if (viewportWidth > 0) {
+				const durationSeconds = (firstElementDuration as number) / TICKS_PER_SECOND;
+				const targetZoom = (viewportWidth / 2) / (durationSeconds * BASE_TIMELINE_PIXELS_PER_SECOND);
+				
+				// Clamp zoom between minZoomLevel and TIMELINE_ZOOM_MAX
+				const clampedZoom = Math.max(minZoomLevel, Math.min(TIMELINE_ZOOM_MAX, targetZoom));
+				setZoomLevel(clampedZoom);
+			}
+		} else if (!firstElementId) {
+			setPrevFirstElementId(undefined);
+		}
+	}, [firstElementId, firstElementDuration, prevFirstElementId, tracksViewportWidth, containerWidth, minZoomLevel, setZoomLevel]);
+
 	const { isResizing, handleResizeStart } = useTimelineResize({
 		zoomLevel,
 		onSnapPointChange: handleSnapPointChange,
