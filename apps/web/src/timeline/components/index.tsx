@@ -127,17 +127,17 @@ export function Timeline() {
 	} = useElementSelection();
 	const editor = useEditor();
 	const timeline = editor.timeline;
-	const scene = useEditor((currentEditor) =>
-		currentEditor.scenes.getActiveSceneOrNull(),
+	const previewTracks = useEditor((currentEditor) =>
+		currentEditor.timeline.getPreviewTracks()
 	);
 	const tracks = useMemo<TimelineTrack[]>(
 		() =>
-			scene
-				? [...scene.tracks.overlay, scene.tracks.main, ...scene.tracks.audio]
+			previewTracks
+				? [...previewTracks.overlay, previewTracks.main, ...previewTracks.audio]
 				: [],
-		[scene],
+		[previewTracks],
 	);
-	const mainTrackId = scene?.tracks.main.id ?? null;
+	const mainTrackId = previewTracks?.main.id ?? null;
 	const seek = (time: MediaTime) => editor.playback.seek({ time });
 
 	const timelineRef = useRef<HTMLDivElement>(null);
@@ -188,8 +188,8 @@ export function Timeline() {
 		});
 
 	// Enforce that when the first clip is inserted, the zoom is set to occupy half of the timeline width
-	const firstElementId = scene?.tracks.main.elements[0]?.id;
-	const firstElementDuration = scene?.tracks.main.elements[0]?.duration;
+	const firstElementId = previewTracks?.main.elements[0]?.id;
+	const firstElementDuration = previewTracks?.main.elements[0]?.duration;
 	const [prevFirstElementId, setPrevFirstElementId] = useState<string | undefined>(undefined);
 
 	useEffect(() => {
@@ -790,13 +790,13 @@ function TimelineTrackRows({
 	dropTarget: DropTarget | null;
 }) {
 	const timeline = useEditor((e) => e.timeline);
-	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
+	const previewTracks = useEditor((e) => e.timeline.getPreviewTracks());
 	const tracks = useMemo<TimelineTrack[]>(
 		() =>
-			scene
-				? [...scene.tracks.overlay, scene.tracks.main, ...scene.tracks.audio]
+			previewTracks
+				? [...previewTracks.overlay, previewTracks.main, ...previewTracks.audio]
 				: [],
-		[scene],
+		[previewTracks],
 	);
 	const { selectedElements } = useElementSelection();
 	const tracksWithSelection = useMemo(
