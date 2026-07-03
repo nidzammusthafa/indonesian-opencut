@@ -22,13 +22,27 @@ export class ToggleTrackLockCommand extends Command {
 			return;
 		}
 
+		const nextLockedState = !targetTrack.locked;
+
 		const updatedTracks = updateTrackInSceneTracks({
 			tracks: this.savedState,
 			trackId: this.trackId,
-			update: (track) => ({ ...track, locked: !track.locked }),
+			update: (track) => ({ ...track, locked: nextLockedState }),
 		});
 
 		editor.timeline.updateTracks(updatedTracks);
+
+		if (nextLockedState) {
+			const currentSelected = editor.selection.getSelectedElements();
+			const nextSelected = currentSelected.filter(
+				(el) => el.trackId !== this.trackId,
+			);
+			return {
+				selection: {
+					selectedElements: nextSelected,
+				},
+			};
+		}
 	}
 
 	undo(): void {

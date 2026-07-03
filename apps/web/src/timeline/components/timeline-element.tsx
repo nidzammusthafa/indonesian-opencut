@@ -579,11 +579,18 @@ function ElementInner({
 						type="button"
 						tabIndex={-1}
 						className="absolute inset-0 size-full flex flex-col"
-						onClick={(event) => onElementClick({ event, element })}
+						onClick={(event) => {
+							if (track.locked) {
+								event.stopPropagation();
+								event.preventDefault();
+								return;
+							}
+							onElementClick({ event, element });
+						}}
 						onMouseDown={(event) => {
 							if (track.locked) {
 								event.stopPropagation();
-								onElementClick({ event, element });
+								event.preventDefault();
 								return;
 							}
 							onElementMouseDown({ event, element });
