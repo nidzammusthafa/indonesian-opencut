@@ -45,7 +45,7 @@ import {
 	Unlink02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { OcRippleIcon, OcCloseGapsIcon } from "@/components/icons";
+import { OcRippleIcon } from "@/components/icons";
 import { GraphEditorPopover } from "./graph-editor/popover";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { useGraphEditorController } from "./graph-editor/use-controller";
@@ -195,14 +195,6 @@ function ToolbarLeftSection() {
 					tooltip="Delete element"
 					onClick={({ event }) =>
 						handleAction({ action: "delete-selected", event })
-					}
-				/>
-
-				<ToolbarButton
-					icon={<OcCloseGapsIcon size={20} />}
-					tooltip="Close Gaps (Tutup Celah Kosong)"
-					onClick={({ event }) =>
-						handleAction({ action: "close-gaps", event })
 					}
 				/>
 

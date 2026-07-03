@@ -98,10 +98,6 @@ export const ACTIONS = {
 		description: "Toggle ripple editing",
 		category: "editing",
 	},
-	"close-gaps": {
-		description: "Close empty gaps on the timeline",
-		category: "editing",
-	},
 	"toggle-source-audio": {
 		description: "Extract or recover source audio",
 		category: "editing",

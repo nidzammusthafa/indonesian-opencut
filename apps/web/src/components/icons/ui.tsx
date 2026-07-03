@@ -402,30 +402,3 @@ export function OcRippleIcon({
 	);
 }
 
-export function OcCloseGapsIcon({
-	className = "",
-	size = 24,
-	strokeWidth = 1.5,
-}: IconProps) {
-	return (
-		<svg
-			width={size}
-			height={size}
-			viewBox="0 0 24 24"
-			fill="none"
-			xmlns="http://www.w3.org/2000/svg"
-			aria-hidden
-			className={className}
-		>
-			<title>Close gaps</title>
-			<path
-				d="M4 6V18M20 6V18M8 12H16M8 12L11 9M8 12L11 15M16 12L13 9M16 12L13 15"
-				stroke="currentColor"
-				strokeWidth={strokeWidth}
-				strokeLinecap="round"
-				strokeLinejoin="round"
-			/>
-		</svg>
-	);
-}
-
