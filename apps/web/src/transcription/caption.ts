@@ -14,6 +14,7 @@ export function buildCaptionChunks({
 	minDuration?: number;
 }): CaptionChunk[] {
 	const captions: CaptionChunk[] = [];
+	// Only used to prevent genuine visual overlap (<50ms gap)
 	let globalEndTime = 0;
 
 	for (const segment of segments) {
@@ -21,7 +22,6 @@ export function buildCaptionChunks({
 		if (words.length === 0 || (words.length === 1 && words[0] === "")) continue;
 
 		const segmentDuration = Math.max(0.1, segment.end - segment.start);
-		const wordsPerSecond = words.length / segmentDuration;
 
 		const chunks: { text: string; wordCount: number }[] = [];
 
@@ -36,7 +36,7 @@ export function buildCaptionChunks({
 			for (const word of words) {
 				currentWords.push(word);
 				const cleanWord = word.trim();
-				
+
 				// Detect sentence endings or major clauses
 				const endsWithPunctuation = /[.!?]$/.test(cleanWord);
 				const endsWithComma = /,$/.test(cleanWord);
@@ -63,17 +63,29 @@ export function buildCaptionChunks({
 			}
 		}
 
-		let chunkStartTime = segment.start;
+		// Distribute chunks proportionally across the segment's actual time window.
+		// Each chunk's startTime is anchored to the segment's real start, not accumulated durations.
+		let wordOffset = 0;
 		for (const chunk of chunks) {
-			const proportion = chunk.wordCount / words.length;
-			let chunkDuration = segmentDuration * proportion;
+			const startProportion = wordOffset / words.length;
+			const endProportion = (wordOffset + chunk.wordCount) / words.length;
 
-			// If it's a single chunk, respect the minDuration limit (e.g. 0.8s) so it doesn't flash too fast.
-			// Otherwise, use a much smaller minimum threshold (e.g. 0.3s) to prevent it from pushing the timeline.
-			const absoluteMin = chunks.length === 1 ? minDuration : 0.3;
-			chunkDuration = Math.max(absoluteMin, chunkDuration);
+			const chunkStart = segment.start + segmentDuration * startProportion;
+			let chunkDuration = segmentDuration * (endProportion - startProportion);
 
-			const adjustedStartTime = Math.max(chunkStartTime, globalEndTime);
+			// Apply a minimum only for single-chunk segments (to avoid flashing too fast).
+			// For multi-chunk, use the actual proportion — don't clamp up, which causes drift.
+			if (chunks.length === 1) {
+				chunkDuration = Math.max(minDuration, chunkDuration);
+			} else {
+				chunkDuration = Math.max(0.1, chunkDuration);
+			}
+
+			// Prevent genuine visual overlap only — if a previous caption ends within 50ms
+			// of this one's start, nudge forward slightly.
+			const adjustedStartTime = globalEndTime > chunkStart + 0.05
+				? globalEndTime
+				: chunkStart;
 
 			captions.push({
 				text: chunk.text,
@@ -82,7 +94,7 @@ export function buildCaptionChunks({
 			});
 
 			globalEndTime = adjustedStartTime + chunkDuration;
-			chunkStartTime += chunkDuration;
+			wordOffset += chunk.wordCount;
 		}
 	}
 
