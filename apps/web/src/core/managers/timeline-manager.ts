@@ -1102,6 +1102,13 @@ export class TimelineManager {
 			return 0;
 		};
 
+		// Apply packed positions directly to main track elements (do NOT use mapTime here,
+		// because after overlap-resolution multiple elements may share the same startTime,
+		// which would cause mapTime to map all of them to the same output position).
+		const packedMainElements = mainElements.map((el, i) => ({
+			...el,
+			startTime: mediaTime({ ticks: newStarts[i] }),
+		}));
 		// Map elements on all tracks, except if the track is locked.
 		const activeTracks = this.editor.scenes.getActiveSceneOrNull()?.tracks;
 		const findOriginalTrack = (trackId: string): TimelineTrack | undefined => {
@@ -1137,7 +1144,7 @@ export class TimelineManager {
 
 		return {
 			overlay: newTracks.overlay.map((track) => mapTrackElements(track)),
-			main: mapTrackElements({ ...mainTrack, elements: mainElements }),
+			main: { ...mainTrack, elements: packedMainElements },
 			audio: newTracks.audio.map((track) => mapTrackElements(track)),
 		};
 	}
