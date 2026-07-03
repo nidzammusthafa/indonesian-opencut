@@ -65,7 +65,14 @@ export function buildCaptionChunks({
 
 		let chunkStartTime = segment.start;
 		for (const chunk of chunks) {
-			const chunkDuration = Math.max(minDuration, chunk.wordCount / wordsPerSecond);
+			const proportion = chunk.wordCount / words.length;
+			let chunkDuration = segmentDuration * proportion;
+
+			// If it's a single chunk, respect the minDuration limit (e.g. 0.8s) so it doesn't flash too fast.
+			// Otherwise, use a much smaller minimum threshold (e.g. 0.3s) to prevent it from pushing the timeline.
+			const absoluteMin = chunks.length === 1 ? minDuration : 0.3;
+			chunkDuration = Math.max(absoluteMin, chunkDuration);
+
 			const adjustedStartTime = Math.max(chunkStartTime, globalEndTime);
 
 			captions.push({
