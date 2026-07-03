@@ -113,6 +113,7 @@ interface BaseTimelineElement {
 	sourceDuration?: MediaTime;
 	animations?: ElementAnimations;
 	params: ParamValues;
+	isSplitRight?: boolean;
 }
 
 export interface VideoElement extends BaseTimelineElement {

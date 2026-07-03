@@ -49,29 +49,38 @@ export function TimelineTrackContent({
 
 	return (
 		<div className="relative size-full">
-			<button
-				type="button"
-				className="absolute inset-0 m-0 size-full appearance-none border-0 bg-transparent p-0"
-				aria-label={`Select ${track.name} track`}
-				onMouseUp={(event) => {
-					if (shouldIgnoreClick?.()) return;
-					onTrackMouseUp?.(event);
-				}}
-				onMouseDown={(event) => {
-					event.preventDefault();
-					onTrackMouseDown?.(event);
-				}}
-			/>
+			{!track.locked && (
+				<button
+					type="button"
+					className="absolute inset-0 m-0 size-full appearance-none border-0 bg-transparent p-0"
+					aria-label={`Select ${track.name} track`}
+					onMouseUp={(event) => {
+						if (shouldIgnoreClick?.()) return;
+						onTrackMouseUp?.(event);
+					}}
+					onMouseDown={(event) => {
+						event.preventDefault();
+						onTrackMouseDown?.(event);
+					}}
+				/>
+			)}
 			{/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- spatial gesture surface; the wrapping <button> handles keyboard track selection, this <div> only forwards background clicks for box-select / deselect. */}
 			<div
-				className="relative h-full min-w-full"
-				style={{ zIndex: TIMELINE_LAYERS.trackContent }}
+				className={`relative h-full min-w-full ${track.locked ? "pointer-events-none opacity-60" : ""}`}
+				style={{
+					zIndex: TIMELINE_LAYERS.trackContent,
+					...(track.locked ? {
+						backgroundImage: "repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04) 10px, transparent 10px, transparent 20px)",
+					} : {})
+				}}
 				onMouseUp={(event) => {
+					if (track.locked) return;
 					if (event.target !== event.currentTarget) return;
 					if (shouldIgnoreClick?.()) return;
 					onTrackMouseUp?.(event);
 				}}
 				onMouseDown={(event) => {
+					if (track.locked) return;
 					if (event.target !== event.currentTarget) return;
 					event.preventDefault();
 					onTrackMouseDown?.(event);

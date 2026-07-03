@@ -12,6 +12,7 @@ import { calculateTotalDuration } from "@/timeline";
 import { TimelineDragSource } from "@/timeline/drag-source";
 import { findTrackInSceneTracks } from "@/timeline/track-element-update";
 import { lastFrameMediaTime, type MediaTime, ZERO_MEDIA_TIME, mediaTime } from "@/wasm";
+import { generateUUID } from "@/utils/id";
 import {
 	canElementBeHidden,
 	canElementHaveAudio,
@@ -995,13 +996,74 @@ export class TimelineManager {
 		this.previewOverlay.clear();
 		this.previewTracks = null;
 
-		// ENFORCE MAGNETIC STORYLINE (MAGNETIC TIMELINE):
-		// Enforce that main track elements are packed contiguous starting from 0.
+		// 1. Resolve overlaps on the main track by splitting existing elements if a new element
+		// starts in the middle of them (support inserting video in the middle of a cut/split video).
 		const mainTrack = newTracks.main;
-		const mainElements = [...mainTrack.elements].sort(
-			(a, b) => (a.startTime as number) - (b.startTime as number)
-		);
+		let mainElements = [...mainTrack.elements];
 
+		if (!mainTrack.locked) {
+			const splitMainElement = (
+				element: any,
+				splitTimeTicks: number
+			): [any, any] => {
+				const relativeTime = splitTimeTicks - (element.startTime as number);
+				
+				// Left half
+				const leftElement = {
+					...element,
+					duration: relativeTime,
+					trimEnd: (element.trimEnd as number) + ((element.duration as number) - relativeTime),
+				};
+
+				// Right half
+				const rightElement = {
+					...element,
+					id: generateUUID(),
+					startTime: splitTimeTicks,
+					duration: (element.duration as number) - relativeTime,
+					trimStart: (element.trimStart as number) + relativeTime,
+					isSplitRight: true,
+				};
+
+				return [leftElement, rightElement];
+			};
+
+			let splitOccurred = true;
+			while (splitOccurred) {
+				splitOccurred = false;
+				for (let i = 0; i < mainElements.length; i++) {
+					const A = mainElements[i];
+					const AStart = A.startTime as number;
+					const AEnd = AStart + (A.duration as number);
+
+					const B = mainElements.find(
+						(el) => el.id !== A.id && (el.startTime as number) > AStart && (el.startTime as number) < AEnd
+					);
+
+					if (B) {
+						const splitTimeTicks = B.startTime as number;
+						const [left, right] = splitMainElement(A, splitTimeTicks);
+						mainElements = mainElements.filter((el) => el.id !== A.id);
+						mainElements.push(left, right);
+						splitOccurred = true;
+						break;
+					}
+				}
+			}
+		}
+
+		// Sort main elements: chronological, placing split-right halves after incoming clips starting at the same time
+		mainElements.sort((a, b) => {
+			if (a.startTime !== b.startTime) {
+				return (a.startTime as number) - (b.startTime as number);
+			}
+			const aIsRight = (a as any).isSplitRight ? 1 : 0;
+			const bIsRight = (b as any).isSplitRight ? 1 : 0;
+			return aIsRight - bIsRight;
+		});
+
+		// 2. ENFORCE MAGNETIC STORYLINE (MAGNETIC TIMELINE):
+		// Enforce that main track elements are packed contiguous starting from 0.
 		// Calculate packed start times
 		const newStarts: number[] = [];
 		let currentStart = 0;
@@ -1047,8 +1109,22 @@ export class TimelineManager {
 			return 0;
 		};
 
-		// Map elements on all tracks
+		// Map elements on all tracks, except if the track is locked.
+		const activeTracks = this.editor.scenes.getActiveSceneOrNull()?.tracks;
+		const findOriginalTrack = (trackId: string): TimelineTrack | undefined => {
+			if (!activeTracks) return undefined;
+			if (activeTracks.main.id === trackId) return activeTracks.main;
+			const overlayTrack = activeTracks.overlay.find((t) => t.id === trackId);
+			if (overlayTrack) return overlayTrack;
+			return activeTracks.audio.find((t) => t.id === trackId);
+		};
+
 		const mapTrackElements = <TTrack extends TimelineTrack>(track: TTrack): TTrack => {
+			const originalTrack = findOriginalTrack(track.id) as TTrack | undefined;
+			if (track.locked) {
+				return originalTrack ? originalTrack : track;
+			}
+
 			const mappedElements = track.elements
 				.map((element) => {
 					const newStart = mapTime(element.startTime as number);
@@ -1068,7 +1144,7 @@ export class TimelineManager {
 
 		const packedTracks: SceneTracks = {
 			overlay: newTracks.overlay.map((track) => mapTrackElements(track)),
-			main: mapTrackElements(mainTrack),
+			main: mapTrackElements({ ...mainTrack, elements: mainElements }),
 			audio: newTracks.audio.map((track) => mapTrackElements(track)),
 		};
 
