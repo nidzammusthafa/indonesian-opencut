@@ -1122,7 +1122,10 @@ export class TimelineManager {
 		const mapTrackElements = <TTrack extends TimelineTrack>(track: TTrack): TTrack => {
 			const originalTrack = findOriginalTrack(track.id) as TTrack | undefined;
 			if (track.locked) {
-				return originalTrack ? originalTrack : track;
+				return {
+					...track,
+					elements: originalTrack ? originalTrack.elements : track.elements,
+				};
 			}
 
 			const mappedElements = track.elements
