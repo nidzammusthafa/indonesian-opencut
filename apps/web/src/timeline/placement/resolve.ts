@@ -166,6 +166,18 @@ export function resolveTrackPlacement({
 	}
 
 	if (strategy.type === "firstAvailable") {
+		if (trackType === "video") {
+			const mainTrackIndex = orderedTracks.findIndex((track) => track.id === tracks.main.id);
+			if (mainTrackIndex >= 0) {
+				return buildExistingTrackResult({
+					track: tracks.main,
+					trackIndex: mainTrackIndex,
+					tracks,
+					timeSpans,
+				});
+			}
+		}
+
 		const existingTrackIndex = findFirstAvailableTrackIndex({
 			tracks: orderedTracks,
 			trackType,
@@ -194,10 +206,10 @@ export function resolveTrackPlacement({
 		const canUseExistingTrack =
 			!strategy.createNewTrackOnly &&
 			isPreferredTrackCompatible &&
-			canPlaceTimeSpansOnTrack({
+			(trackType === "video" || canPlaceTimeSpansOnTrack({
 				track: preferredTrack,
 				timeSpans,
-			});
+			}));
 		if (canUseExistingTrack) {
 			return buildExistingTrackResult({
 				track: preferredTrack,
@@ -231,10 +243,10 @@ export function resolveTrackPlacement({
 		if (
 			aboveTrack &&
 			aboveTrack.type === trackType &&
-			canPlaceTimeSpansOnTrack({
+			(trackType === "video" || canPlaceTimeSpansOnTrack({
 				track: aboveTrack,
 				timeSpans,
-			})
+			}))
 		) {
 			return buildExistingTrackResult({
 				track: aboveTrack,
