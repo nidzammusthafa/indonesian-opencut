@@ -1,5 +1,5 @@
 import type { EditorCore } from "@/core";
-import type { Command, CommandResult } from "@/commands";
+import { type Command, type CommandResult, DeleteElementsCommand } from "@/commands";
 import type { EditorSelectionSnapshot } from "@/selection/editor-selection";
 import { applyRippleAdjustments, computeRippleAdjustments } from "@/ripple";
 import type { SceneTracks } from "@/timeline/types";
@@ -19,7 +19,7 @@ export class CommandManager {
 	constructor(private editor: EditorCore) {}
 
 	execute({ command }: { command: Command }): Command {
-		const beforeTracks = this.isRippleEnabled
+		const beforeTracks = this.isRippleEnabled && !(command instanceof DeleteElementsCommand)
 			? (this.editor.scenes.getActiveSceneOrNull()?.tracks ?? null)
 			: null;
 		const previousSelection = this.getSelectionSnapshot();
@@ -74,7 +74,7 @@ export class CommandManager {
 			return;
 		}
 
-		const beforeTracks = this.isRippleEnabled
+		const beforeTracks = this.isRippleEnabled && !(entry.command instanceof DeleteElementsCommand)
 			? (this.editor.scenes.getActiveSceneOrNull()?.tracks ?? null)
 			: null;
 		const previousSelection = this.getSelectionSnapshot();
