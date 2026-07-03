@@ -11,7 +11,7 @@ import type {
 import { calculateTotalDuration } from "@/timeline";
 import { TimelineDragSource } from "@/timeline/drag-source";
 import { findTrackInSceneTracks } from "@/timeline/track-element-update";
-import { lastFrameMediaTime, type MediaTime, ZERO_MEDIA_TIME, addMediaTime, subMediaTime } from "@/wasm";
+import { lastFrameMediaTime, type MediaTime, ZERO_MEDIA_TIME, mediaTime } from "@/wasm";
 import {
 	canElementBeHidden,
 	canElementHaveAudio,
@@ -255,89 +255,6 @@ export class TimelineManager {
 		elements: { trackId: string; elementId: string }[];
 	}): void {
 		const command = new DeleteElementsCommand({ elements });
-		this.editor.command.execute({ command });
-	}
-
-	closeGaps(): void {
-		const activeScene = this.editor.scenes.getActiveSceneOrNull();
-		if (!activeScene) {
-			return;
-		}
-
-		const beforeTracks = activeScene.tracks;
-		const mainElements = [...beforeTracks.main.elements].sort((a, b) => a.startTime - b.startTime);
-
-		if (mainElements.length === 0) {
-			return;
-		}
-
-		// Map each main element ID to its new start time.
-		const mainElementNewTimes = new Map<string, MediaTime>();
-		let currentEndTime: MediaTime = ZERO_MEDIA_TIME;
-
-		for (const element of mainElements) {
-			mainElementNewTimes.set(element.id, currentEndTime);
-			currentEndTime = addMediaTime({ a: currentEndTime, b: element.duration });
-		}
-
-		// Calculate how much each main element was shifted.
-		// For elements on other tracks, shift them relative to the closest preceding main element.
-		const getShiftForTime = (originalTime: MediaTime): MediaTime => {
-			let bestElement = mainElements[0];
-			for (const element of mainElements) {
-				if (element.startTime <= originalTime) {
-					bestElement = element;
-				} else {
-					break;
-				}
-			}
-
-			const newStart = mainElementNewTimes.get(bestElement.id)!;
-			const shift = subMediaTime({ a: newStart, b: bestElement.startTime });
-			return shift;
-		};
-
-		// Helper to shift a list of elements
-		const shiftElements = (elements: any[]): any[] => {
-			return elements.map(el => {
-				const shift = getShiftForTime(el.startTime);
-				const newStart = addMediaTime({ a: el.startTime, b: shift });
-				return {
-					...el,
-					startTime: newStart < 0 ? ZERO_MEDIA_TIME : newStart,
-				};
-			});
-		};
-
-		// Apply shifts to all tracks
-		const newMainElements = mainElements.map(el => ({
-			...el,
-			startTime: mainElementNewTimes.get(el.id)!,
-		}));
-
-		const newOverlay = beforeTracks.overlay.map(track => ({
-			...track,
-			elements: shiftElements(track.elements),
-		}));
-
-		const newAudio = beforeTracks.audio.map(track => ({
-			...track,
-			elements: shiftElements(track.elements),
-		}));
-
-		const afterTracks: SceneTracks = {
-			main: {
-				...beforeTracks.main,
-				elements: newMainElements,
-			},
-			overlay: newOverlay as any,
-			audio: newAudio as any,
-		};
-
-		const command = new TracksSnapshotCommand({
-			before: beforeTracks,
-			after: afterTracks,
-		});
 		this.editor.command.execute({ command });
 	}
 
@@ -1071,7 +988,85 @@ export class TimelineManager {
 	updateTracks(newTracks: SceneTracks): void {
 		this.previewOverlay.clear();
 		this.previewTracks = null;
-		this.editor.scenes.updateSceneTracks({ tracks: newTracks });
+
+		// ENFORCE MAGNETIC STORYLINE (MAGNETIC TIMELINE):
+		// Enforce that main track elements are packed contiguous starting from 0.
+		const mainTrack = newTracks.main;
+		const mainElements = [...mainTrack.elements].sort(
+			(a, b) => (a.startTime as number) - (b.startTime as number)
+		);
+
+		// Calculate packed start times
+		const newStarts: number[] = [];
+		let currentStart = 0;
+		for (const el of mainElements) {
+			newStarts.push(currentStart);
+			currentStart += el.duration as number;
+		}
+
+		// Define mapping function for timestamps
+		const mapTime = (t: number): number => {
+			if (mainElements.length === 0) return 0;
+
+			if (t < (mainElements[0].startTime as number)) {
+				return 0;
+			}
+
+			for (let i = 0; i < mainElements.length; i++) {
+				const start = mainElements[i].startTime as number;
+				const end = (mainElements[i].startTime + mainElements[i].duration) as number;
+
+				if (t >= start && t <= end) {
+					return newStarts[i] + (t - start);
+				}
+
+				if (i < mainElements.length - 1) {
+					const nextStart = mainElements[i + 1].startTime as number;
+					if (t > end && t < nextStart) {
+						return newStarts[i] + (mainElements[i].duration as number);
+					}
+				}
+			}
+
+			const lastEnd = (mainElements[mainElements.length - 1].startTime +
+				mainElements[mainElements.length - 1].duration) as number;
+			if (t > lastEnd) {
+				return (
+					newStarts[mainElements.length - 1] +
+					(mainElements[mainElements.length - 1].duration as number) +
+					(t - lastEnd)
+				);
+			}
+
+			return 0;
+		};
+
+		// Map elements on all tracks
+		const mapTrackElements = <TTrack extends TimelineTrack>(track: TTrack): TTrack => {
+			const mappedElements = track.elements
+				.map((element) => {
+					const newStart = mapTime(element.startTime as number);
+					const newEnd = mapTime((element.startTime + element.duration) as number);
+					const newDuration = newEnd - newStart;
+
+					return {
+						...element,
+						startTime: mediaTime({ ticks: newStart }),
+						duration: mediaTime({ ticks: newDuration }),
+					};
+				})
+				.filter((element) => element.duration > 0);
+
+			return { ...track, elements: mappedElements } as TTrack;
+		};
+
+		const packedTracks: SceneTracks = {
+			overlay: newTracks.overlay.map((track) => mapTrackElements(track)),
+			main: mapTrackElements(mainTrack),
+			audio: newTracks.audio.map((track) => mapTrackElements(track)),
+		};
+
+		this.editor.scenes.updateSceneTracks({ tracks: packedTracks });
 		this.notify();
 	}
 }
