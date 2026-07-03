@@ -31,6 +31,7 @@ export type TrackType = "video" | "text" | "audio" | "graphic" | "effect";
 interface BaseTrack {
 	id: string;
 	name: string;
+	locked?: boolean;
 }
 
 export interface VideoTrack extends BaseTrack {

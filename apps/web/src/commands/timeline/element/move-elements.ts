@@ -57,6 +57,9 @@ export class MoveElementCommand extends Command {
 				tracks: this.savedState,
 				trackId: move.sourceTrackId,
 			});
+			if (sourceTrack?.locked) {
+				return;
+			}
 			const sourceElement = sourceTrack?.elements.find(
 				(trackElement) => trackElement.id === move.elementId,
 			);
@@ -70,6 +73,9 @@ export class MoveElementCommand extends Command {
 			});
 			if (!targetTrack) {
 				throw new Error("Target track not found");
+			}
+			if (targetTrack.locked) {
+				return;
 			}
 
 			const validation = validateElementTrackCompatibility({

@@ -580,7 +580,14 @@ function ElementInner({
 						tabIndex={-1}
 						className="absolute inset-0 size-full flex flex-col"
 						onClick={(event) => onElementClick({ event, element })}
-						onMouseDown={(event) => onElementMouseDown({ event, element })}
+						onMouseDown={(event) => {
+							if (track.locked) {
+								event.stopPropagation();
+								onElementClick({ event, element });
+								return;
+							}
+							onElementMouseDown({ event, element });
+						}}
 					>
 						<div
 							className={cn(
@@ -603,7 +610,7 @@ function ElementInner({
 				</div>
 			</div>
 
-			{isSelected && (
+			{isSelected && !track.locked && (
 				<>
 					<ResizeHandle
 						side="left"

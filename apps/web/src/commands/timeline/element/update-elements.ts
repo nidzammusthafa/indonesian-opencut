@@ -86,10 +86,13 @@ export class UpdateElementsCommand extends Command {
 				tracks: updatedTracks,
 				trackId: updateEntry.trackId,
 			});
-			const currentElement = currentTrack?.elements.find(
+			if (!currentTrack || currentTrack.locked) {
+				continue;
+			}
+			const currentElement = currentTrack.elements.find(
 				(element) => element.id === updateEntry.elementId,
 			);
-			if (!currentTrack || !currentElement) {
+			if (!currentElement) {
 				continue;
 			}
 

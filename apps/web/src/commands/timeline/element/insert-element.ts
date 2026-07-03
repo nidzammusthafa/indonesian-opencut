@@ -263,6 +263,17 @@ export class InsertElementCommand extends Command {
 			return null;
 		}
 
+		if (placementResult.kind === "existingTrack") {
+			const targetTrack =
+				tracks.main.id === placementResult.trackId
+					? tracks.main
+					: (tracks.overlay.find((track) => track.id === placementResult.trackId) ??
+						tracks.audio.find((track) => track.id === placementResult.trackId));
+			if (targetTrack?.locked) {
+				return null;
+			}
+		}
+
 		const elementToPlace =
 			placementResult.kind === "existingTrack"
 				? {

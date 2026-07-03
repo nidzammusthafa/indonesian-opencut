@@ -99,6 +99,9 @@ export class PasteCommand extends Command {
 							: updatedTracks.audio[
 									placementResult.trackIndex - updatedTracks.overlay.length - 1
 								];
+				if (targetTrack?.locked) {
+					continue;
+				}
 				if (targetTrack?.id === updatedTracks.main.id) {
 					const earliestElement = elementsToAdd.reduce((earliest, element) =>
 						element.startTime < earliest.startTime ? element : earliest,

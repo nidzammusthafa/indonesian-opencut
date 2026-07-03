@@ -40,14 +40,20 @@ export class DeleteElementsCommand extends Command {
 
 		const updatedTracks: SceneTracks = {
 			overlay: this.savedState.overlay.map((track) =>
-				removeTrackElements({ track, elements: this.elements }),
+				track.locked
+					? track
+					: removeTrackElements({ track, elements: this.elements }),
 			),
-			main: removeTrackElements({
-				track: this.savedState.main,
-				elements: this.elements,
-			}),
+			main: this.savedState.main.locked
+				? this.savedState.main
+				: removeTrackElements({
+						track: this.savedState.main,
+						elements: this.elements,
+					}),
 			audio: this.savedState.audio.map((track) =>
-				removeTrackElements({ track, elements: this.elements }),
+				track.locked
+					? track
+					: removeTrackElements({ track, elements: this.elements }),
 			),
 		};
 

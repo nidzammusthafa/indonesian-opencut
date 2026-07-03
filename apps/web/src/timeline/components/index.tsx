@@ -11,6 +11,8 @@ import {
 	ViewOffSlashIcon,
 	VolumeHighIcon,
 	VolumeOffIcon,
+	LockIcon,
+	Unlock as UnlockIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { OcShapesIcon, OcVideoIcon } from "@/components/icons";
@@ -722,6 +724,18 @@ function TrackLabelsPanel({
 													}
 												/>
 											)}
+											<TrackToggleIcon
+												isOff={track.locked ?? false}
+												icons={{
+													on: UnlockIcon,
+													off: LockIcon,
+												}}
+												onClick={() =>
+													editor.timeline.toggleTrackLock({
+														trackId: track.id,
+													})
+												}
+											/>
 											<TrackIcon track={track} />
 										</div>
 										{expandedRows.length > 0 && (
@@ -890,6 +904,15 @@ function TimelineTrackRows({
 							{canTrackBeHidden(track) && track.hidden
 								? "Show track"
 								: "Hide track"}
+						</ContextMenuItem>
+						<ContextMenuItem
+							icon={<HugeiconsIcon icon={LockIcon} />}
+							onClick={(event: React.MouseEvent) => {
+								event.stopPropagation();
+								timeline.toggleTrackLock({ trackId: track.id });
+							}}
+						>
+							{track.locked ? "Unlock track" : "Lock track"}
 						</ContextMenuItem>
 						{track.id !== mainTrackId && (
 							<ContextMenuItem
