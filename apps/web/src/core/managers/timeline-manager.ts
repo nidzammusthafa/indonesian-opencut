@@ -11,7 +11,7 @@ import type {
 import { calculateTotalDuration } from "@/timeline";
 import { TimelineDragSource } from "@/timeline/drag-source";
 import { findTrackInSceneTracks } from "@/timeline/track-element-update";
-import { lastFrameMediaTime, type MediaTime, ZERO_MEDIA_TIME } from "@/wasm";
+import { lastFrameMediaTime, type MediaTime, ZERO_MEDIA_TIME, addMediaTime, subMediaTime } from "@/wasm";
 import {
 	canElementBeHidden,
 	canElementHaveAudio,
@@ -255,6 +255,89 @@ export class TimelineManager {
 		elements: { trackId: string; elementId: string }[];
 	}): void {
 		const command = new DeleteElementsCommand({ elements });
+		this.editor.command.execute({ command });
+	}
+
+	closeGaps(): void {
+		const activeScene = this.editor.scenes.getActiveSceneOrNull();
+		if (!activeScene) {
+			return;
+		}
+
+		const beforeTracks = activeScene.tracks;
+		const mainElements = [...beforeTracks.main.elements].sort((a, b) => a.startTime - b.startTime);
+
+		if (mainElements.length === 0) {
+			return;
+		}
+
+		// Map each main element ID to its new start time.
+		const mainElementNewTimes = new Map<string, MediaTime>();
+		let currentEndTime: MediaTime = ZERO_MEDIA_TIME;
+
+		for (const element of mainElements) {
+			mainElementNewTimes.set(element.id, currentEndTime);
+			currentEndTime = addMediaTime({ a: currentEndTime, b: element.duration });
+		}
+
+		// Calculate how much each main element was shifted.
+		// For elements on other tracks, shift them relative to the closest preceding main element.
+		const getShiftForTime = (originalTime: MediaTime): MediaTime => {
+			let bestElement = mainElements[0];
+			for (const element of mainElements) {
+				if (element.startTime <= originalTime) {
+					bestElement = element;
+				} else {
+					break;
+				}
+			}
+
+			const newStart = mainElementNewTimes.get(bestElement.id)!;
+			const shift = subMediaTime({ a: newStart, b: bestElement.startTime });
+			return shift;
+		};
+
+		// Helper to shift a list of elements
+		const shiftElements = (elements: any[]): any[] => {
+			return elements.map(el => {
+				const shift = getShiftForTime(el.startTime);
+				const newStart = addMediaTime({ a: el.startTime, b: shift });
+				return {
+					...el,
+					startTime: newStart < 0 ? ZERO_MEDIA_TIME : newStart,
+				};
+			});
+		};
+
+		// Apply shifts to all tracks
+		const newMainElements = mainElements.map(el => ({
+			...el,
+			startTime: mainElementNewTimes.get(el.id)!,
+		}));
+
+		const newOverlay = beforeTracks.overlay.map(track => ({
+			...track,
+			elements: shiftElements(track.elements),
+		}));
+
+		const newAudio = beforeTracks.audio.map(track => ({
+			...track,
+			elements: shiftElements(track.elements),
+		}));
+
+		const afterTracks: SceneTracks = {
+			main: {
+				...beforeTracks.main,
+				elements: newMainElements,
+			},
+			overlay: newOverlay as any,
+			audio: newAudio as any,
+		};
+
+		const command = new TracksSnapshotCommand({
+			before: beforeTracks,
+			after: afterTracks,
+		});
 		this.editor.command.execute({ command });
 	}
 

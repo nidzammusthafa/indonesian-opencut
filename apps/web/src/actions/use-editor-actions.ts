@@ -446,6 +446,14 @@ export function useEditorActions() {
 	);
 
 	useActionHandler(
+		"close-gaps",
+		() => {
+			editor.timeline.closeGaps();
+		},
+		undefined,
+	);
+
+	useActionHandler(
 		"copy-selected",
 		() => {
 			editor.clipboard.copy();
