@@ -445,6 +445,12 @@ function canApplyMovesToExistingTracks({
 			return false;
 		}
 
+		// Main video track allows overlaps — packTracks will reorder/shift them.
+		const isMainTrack = targetTrackId === tracks.main.id;
+		if (isMainTrack) {
+			continue;
+		}
+
 		const timeSpans = targetMoves.map((move) => {
 			const sourceElement = sourceElements.get(move.elementId);
 			return {
