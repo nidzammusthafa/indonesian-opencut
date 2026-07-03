@@ -99,6 +99,7 @@ export const extractTimelineAudio = async ({
 			samples: new Float32Array(
 				SAMPLE_RATE * EMPTY_TIMELINE_SILENT_DURATION_SECONDS,
 			),
+			sampleRate: SAMPLE_RATE,
 		});
 	}
 
@@ -119,7 +120,7 @@ export const extractTimelineAudio = async ({
 		const silentSamples = new Float32Array(
 			Math.ceil(silentDurationSeconds * SAMPLE_RATE) * NUM_CHANNELS,
 		);
-		return createWavBlob({ samples: silentSamples });
+		return createWavBlob({ samples: silentSamples, sampleRate: SAMPLE_RATE });
 	}
 
 	onProgress?.(90);
@@ -127,7 +128,7 @@ export const extractTimelineAudio = async ({
 	const interleavedSamples = interleaveAudioBuffer({ audioBuffer });
 	onProgress?.(100);
 
-	return createWavBlob({ samples: interleavedSamples });
+	return createWavBlob({ samples: interleavedSamples, sampleRate: audioBuffer.sampleRate });
 };
 
 function interleaveAudioBuffer({
@@ -151,7 +152,13 @@ function interleaveAudioBuffer({
 	return interleavedSamples;
 }
 
-function createWavBlob({ samples }: { samples: Float32Array }): Blob {
+function createWavBlob({
+	samples,
+	sampleRate = SAMPLE_RATE,
+}: {
+	samples: Float32Array;
+	sampleRate?: number;
+}): Blob {
 	const numChannels = NUM_CHANNELS;
 	const bitsPerSample = 16;
 	const bytesPerSample = bitsPerSample / 8;
@@ -170,8 +177,8 @@ function createWavBlob({ samples }: { samples: Float32Array }): Blob {
 	view.setUint32(16, 16, true);
 	view.setUint16(20, 1, true);
 	view.setUint16(22, numChannels, true);
-	view.setUint32(24, SAMPLE_RATE, true);
-	view.setUint32(28, SAMPLE_RATE * numChannels * bytesPerSample, true);
+	view.setUint32(24, sampleRate, true);
+	view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
 	view.setUint16(32, numChannels * bytesPerSample, true);
 	view.setUint16(34, bitsPerSample, true);
 

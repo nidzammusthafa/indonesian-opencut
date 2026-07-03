@@ -1,4 +1,4 @@
-import { mediaTimeToSeconds, roundMediaTime } from "@/wasm";
+import { mediaTimeToSeconds, roundMediaTime, TICKS_PER_SECOND } from "@/wasm";
 import { getElementLocalTime } from "@/animation";
 import { resolveEffectParamsAtTime } from "@/animation/effect-param-channel";
 import {
@@ -401,11 +401,12 @@ function resolveTextNode({
 				const contentStr = typeof node.params.params.content === "string" ? node.params.params.content : "";
 				const wordsList = contentStr.trim().split(/\s+/).filter(Boolean);
 				if (wordsList.length === 0) return 0;
-				const durationSec = node.params.duration;
-				const timePerWord = durationSec / wordsList.length;
-				const highlightOffset = -0.15; // 150ms anticipation offset
-				const adjustedLocalTime = localTime - highlightOffset;
-				return Math.max(0, Math.floor(adjustedLocalTime / timePerWord));
+				const durationTicks = node.params.duration;
+				const timePerWordTicks = durationTicks / wordsList.length;
+				const highlightOffsetSeconds = -0.15; // 150ms anticipation offset
+				const highlightOffsetTicks = highlightOffsetSeconds * TICKS_PER_SECOND;
+				const adjustedLocalTime = localTime - highlightOffsetTicks;
+				return Math.max(0, Math.floor(adjustedLocalTime / timePerWordTicks));
 			})(),
 		},
 	};
