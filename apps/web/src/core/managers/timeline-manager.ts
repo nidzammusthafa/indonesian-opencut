@@ -996,70 +996,56 @@ export class TimelineManager {
 		this.previewOverlay.clear();
 		this.previewTracks = null;
 
-		// 1. Resolve overlaps on the main track by splitting existing elements if a new element
-		// starts in the middle of them (support inserting video in the middle of a cut/split video).
+		// 1. Resolve overlaps on the main track by shifting overlapping elements to the left or right
+		// of the clip they overlap, depending on which side they lean towards.
 		const mainTrack = newTracks.main;
 		let mainElements = [...mainTrack.elements];
 
 		if (!mainTrack.locked) {
-			const splitMainElement = (
-				element: any,
-				splitTimeTicks: number
-			): [any, any] => {
-				const relativeTime = splitTimeTicks - (element.startTime as number);
-				
-				// Left half
-				const leftElement = {
-					...element,
-					duration: relativeTime,
-					trimEnd: (element.trimEnd as number) + ((element.duration as number) - relativeTime),
-				};
-
-				// Right half
-				const rightElement = {
-					...element,
-					id: generateUUID(),
-					startTime: splitTimeTicks,
-					duration: (element.duration as number) - relativeTime,
-					trimStart: (element.trimStart as number) + relativeTime,
-					isSplitRight: true,
-				};
-
-				return [leftElement, rightElement];
-			};
-
-			let splitOccurred = true;
-			while (splitOccurred) {
-				splitOccurred = false;
+			let adjusted = true;
+			while (adjusted) {
+				adjusted = false;
 				for (let i = 0; i < mainElements.length; i++) {
-					const A = mainElements[i];
-					const AStart = A.startTime as number;
-					const AEnd = AStart + (A.duration as number);
+					const B = mainElements[i];
+					const BStart = B.startTime as number;
 
-					const B = mainElements.find(
-						(el) => el.id !== A.id && (el.startTime as number) > AStart && (el.startTime as number) < AEnd
+					const A = mainElements.find(
+						(el) => el.id !== B.id && 
+						        (BStart > (el.startTime as number)) && 
+						        (BStart < (el.startTime as number) + (el.duration as number))
 					);
 
-					if (B) {
-						const splitTimeTicks = B.startTime as number;
-						const [left, right] = splitMainElement(A, splitTimeTicks);
-						mainElements = mainElements.filter((el) => el.id !== A.id);
-						mainElements.push(left, right);
-						splitOccurred = true;
+					if (A) {
+						const AStart = A.startTime as number;
+						const ADur = A.duration as number;
+						const midpoint = AStart + ADur / 2;
+
+						if (BStart < midpoint) {
+							// Leans left: place B before A
+							B.startTime = mediaTime({ ticks: AStart });
+							(B as any).sortHint = -1;
+							(A as any).sortHint = 1;
+						} else {
+							// Leans right: place B after A
+							B.startTime = mediaTime({ ticks: AStart + ADur });
+							(B as any).sortHint = 1;
+							(A as any).sortHint = -1;
+						}
+						adjusted = true;
 						break;
 					}
 				}
 			}
 		}
 
-		// Sort main elements: chronological, placing split-right halves after incoming clips starting at the same time
+		// Sort main elements: chronological, using sortHint to resolve equal start times
 		mainElements.sort((a, b) => {
 			if (a.startTime !== b.startTime) {
 				return (a.startTime as number) - (b.startTime as number);
 			}
-			const aIsRight = (a as any).isSplitRight ? 1 : 0;
-			const bIsRight = (b as any).isSplitRight ? 1 : 0;
-			return aIsRight - bIsRight;
+			const aHint = (a as any).sortHint || 0;
+			const bHint = (b as any).sortHint || 0;
+			return aHint - bHint;
 		});
 
 		// 2. ENFORCE MAGNETIC STORYLINE (MAGNETIC TIMELINE):
