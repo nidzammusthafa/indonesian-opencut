@@ -23,6 +23,7 @@ import {
 	PreviewViewportProvider,
 	usePreviewViewportState,
 } from "./preview-viewport";
+import { AssetPreviewOverlay } from "./asset-preview-overlay";
 
 function usePreviewSize() {
 	const canvasSize = useEditor(
@@ -331,6 +332,7 @@ function PreviewCanvas({
 									instances={overlayInstances}
 									plane="over-interaction"
 								/>
+								<AssetPreviewOverlay />
 							</div>
 						</ContextMenuTrigger>
 						<PreviewContextMenu

@@ -35,6 +35,7 @@ import {
 } from "@/components/section";
 import { useEditor } from "@/editor/use-editor";
 import { DEFAULT_EXPORT_OPTIONS } from "@/export/defaults";
+import { useExportStore } from "@/export/export-store";
 
 
 function isExportFormat(value: string): value is ExportFormat {
@@ -52,10 +53,6 @@ export function ExportButton() {
 	const hasProject = !!activeProject;
 
 	const handlePopoverOpenChange = ({ open }: { open: boolean }) => {
-		if (!open) {
-			editor.project.cancelExport();
-			editor.project.clearExportState();
-		}
 		setIsExportPopoverOpen(open);
 	};
 
@@ -101,8 +98,7 @@ function ExportPopover({
 }) {
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
-	const exportState = useEditor((e) => e.project.getExportState());
-	const { isExporting, progress, result: exportResult } = exportState;
+	const { isExporting, progress, result: exportResult } = useExportStore();
 	const [format, setFormat] = useState<ExportFormat>(
 		DEFAULT_EXPORT_OPTIONS.format,
 	);
@@ -116,7 +112,7 @@ function ExportPopover({
 	const handleExport = async () => {
 		if (!activeProject) return;
 
-		const result = await editor.project.export({
+		editor.project.export({
 			options: {
 				format,
 				quality,
@@ -124,22 +120,6 @@ function ExportPopover({
 				includeAudio: shouldIncludeAudio,
 			},
 		});
-
-		if (result.cancelled) {
-			editor.project.clearExportState();
-			return;
-		}
-
-		if (result.success && result.buffer) {
-			downloadBuffer({
-				buffer: result.buffer,
-				filename: `${activeProject.metadata.name}${getExportFileExtension({ format })}`,
-				mimeType: getExportMimeType({ format }),
-			});
-
-			editor.project.clearExportState();
-			onOpenChange(false);
-		}
 	};
 
 	const handleCancel = () => {

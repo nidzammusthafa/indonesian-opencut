@@ -649,7 +649,7 @@ describe("resolveTrackPlacement", () => {
 			trackIndex: 0,
 			trackType: "video",
 			adjustedStartTime: 0,
-		});
+		} as any);
 	});
 
 	test("preferIndex uses vertical drag direction when hovered track is incompatible", () => {

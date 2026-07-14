@@ -24,6 +24,7 @@ import { useEditor } from "@/editor/use-editor";
 import { CommandIcon, Logout05Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShortcutsDialog } from "@/actions/components/shortcuts-dialog";
+import { ExportProgressToast } from "./export-progress-toast";
 import Image from "next/image";
 import { cn } from "@/utils/ui";
 
@@ -39,6 +40,7 @@ export function EditorHeader() {
 				<ExportButton />
 				<ThemeToggle />
 			</nav>
+			<ExportProgressToast />
 		</header>
 	);
 }

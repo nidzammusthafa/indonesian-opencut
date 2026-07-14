@@ -19,6 +19,18 @@ interface PreviewState {
 	activeGuide: GuideId | null;
 	overlays: PreviewOverlaysState;
 	gridConfig: GridConfig;
+	assetPreviewUrl: string | null;
+	assetPreviewName: string | null;
+	assetPreviewType: "video" | "image" | "audio" | null;
+	assetPreviewWidth: number | null;
+	assetPreviewHeight: number | null;
+	setAssetPreview: (preview: {
+		url: string | null;
+		name: string | null;
+		type: "video" | "image" | "audio" | null;
+		width?: number | null;
+		height?: number | null;
+	}) => void;
 	toggleGuide: (guideId: GuideId) => void;
 	setGridConfig: (config: Partial<GridConfig>) => void;
 	setOverlayVisibility: ({
@@ -52,6 +64,20 @@ export const usePreviewStore = create<PreviewState>()(
 			activeGuide: null,
 			overlays: DEFAULT_PREVIEW_OVERLAYS,
 			gridConfig: DEFAULT_GRID_CONFIG,
+			assetPreviewUrl: null,
+			assetPreviewName: null,
+			assetPreviewType: null,
+			assetPreviewWidth: null,
+			assetPreviewHeight: null,
+			setAssetPreview: (preview) => {
+				set({
+					assetPreviewUrl: preview.url,
+					assetPreviewName: preview.name,
+					assetPreviewType: preview.type,
+					assetPreviewWidth: preview.width ?? null,
+					assetPreviewHeight: preview.height ?? null,
+				});
+			},
 			toggleGuide: (guideId) => {
 				set((state) => ({
 					activeGuide: state.activeGuide === guideId ? null : guideId,
@@ -92,6 +118,9 @@ export const usePreviewStore = create<PreviewState>()(
 						rows: state?.gridConfig?.rows ?? DEFAULT_GRID_CONFIG.rows,
 						cols: state?.gridConfig?.cols ?? DEFAULT_GRID_CONFIG.cols,
 					},
+					assetPreviewUrl: null,
+					assetPreviewName: null,
+					assetPreviewType: null,
 				};
 			},
 			partialize: (state) => ({

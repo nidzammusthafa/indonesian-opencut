@@ -176,7 +176,7 @@ export function Timeline() {
 
 	const savedViewState = editor.project.getTimelineViewState();
 
-	const { zoomLevel, setZoomLevel, handleWheel, saveScrollPosition } =
+	const { zoomLevel, isManuallyZoomed, setZoomLevel, handleWheel, saveScrollPosition } =
 		useTimelineZoom({
 			containerRef: timelineRef,
 			minZoom: minZoomLevel,
@@ -202,12 +202,14 @@ export function Timeline() {
 				
 				// Clamp zoom between minZoomLevel and TIMELINE_ZOOM_MAX
 				const clampedZoom = Math.max(minZoomLevel, Math.min(TIMELINE_ZOOM_MAX, targetZoom));
-				setZoomLevel(clampedZoom);
+				if (!isManuallyZoomed) {
+					setZoomLevel(clampedZoom);
+				}
 			}
 		} else if (!firstElementId) {
 			setPrevFirstElementId(undefined);
 		}
-	}, [firstElementId, firstElementDuration, prevFirstElementId, tracksViewportWidth, containerWidth, minZoomLevel, setZoomLevel]);
+	}, [firstElementId, firstElementDuration, prevFirstElementId, tracksViewportWidth, containerWidth, minZoomLevel, setZoomLevel, isManuallyZoomed]);
 
 	const { isResizing, handleResizeStart } = useTimelineResize({
 		zoomLevel,
@@ -465,7 +467,7 @@ export function Timeline() {
 			<TimelineToolbar
 				zoomLevel={zoomLevel}
 				minZoom={minZoomLevel}
-				setZoomLevel={({ zoom }) => setZoomLevel(zoom)}
+				setZoomLevel={({ zoom }) => setZoomLevel(zoom, { userInitiated: true })}
 			/>
 
 			<div className="relative flex flex-1 overflow-hidden" ref={timelineRef}>

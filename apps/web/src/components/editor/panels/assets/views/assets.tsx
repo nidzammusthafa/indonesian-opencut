@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { usePreviewStore } from "@/preview/preview-store";
 import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import { MediaDragOverlay } from "@/components/editor/panels/assets/drag-overlay";
 import { DraggableItem } from "@/components/editor/panels/assets/draggable-item";
@@ -126,10 +127,10 @@ export function MediaView() {
 		event,
 		ids,
 	}: {
-		event: React.MouseEvent;
+		event?: React.MouseEvent | KeyboardEvent;
 		ids: string[];
 	}) => {
-		event.stopPropagation();
+		event?.stopPropagation();
 
 		invokeAction("remove-media-assets", {
 			projectId: activeProject.metadata.id,
@@ -223,6 +224,8 @@ export function MediaView() {
 						onRevealComplete={clearHighlight}
 					>
 						<MediaScopeRegistrar />
+						<MediaSelectionWatcher items={filteredMediaItems} />
+						<MediaKeyboardHandler onRemove={handleRemove} />
 						<MediaItemList
 							items={filteredMediaItems}
 							mode={mediaViewMode}
@@ -233,6 +236,82 @@ export function MediaView() {
 			</PanelView>
 		</>
 	);
+}
+
+function MediaSelectionWatcher({
+	items,
+}: {
+	items: MediaAsset[];
+}) {
+	const { selectedIds } = useSelection();
+	const setAssetPreview = usePreviewStore((s) => s.setAssetPreview);
+
+	useEffect(() => {
+		if (selectedIds.length === 1) {
+			const selectedId = selectedIds[0];
+			const asset = items.find((item) => item.id === selectedId);
+			if (asset) {
+				const type = asset.type;
+				const url = asset.url ?? asset.thumbnailUrl ?? null;
+				setAssetPreview({
+					url,
+					name: asset.name,
+					type,
+					width: asset.width,
+					height: asset.height,
+				});
+			} else {
+				setAssetPreview({ url: null, name: null, type: null, width: null, height: null });
+			}
+		} else {
+			setAssetPreview({ url: null, name: null, type: null, width: null, height: null });
+		}
+	}, [selectedIds, items, setAssetPreview]);
+
+	useEffect(() => {
+		return () => {
+			setAssetPreview({ url: null, name: null, type: null, width: null, height: null });
+		};
+	}, [setAssetPreview]);
+
+	return null;
+}
+
+function MediaKeyboardHandler({
+	onRemove,
+}: {
+	onRemove: (args: { event?: React.MouseEvent | KeyboardEvent; ids: string[] }) => void;
+}) {
+	const { selectedIds } = useSelection();
+	const activeProject = useEditor((e) => e.project.getActiveOrNull());
+
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (selectedIds.length === 0 || !activeProject) return;
+
+			const activeElement = document.activeElement;
+			if (
+				activeElement &&
+				(activeElement.tagName === "INPUT" ||
+					activeElement.tagName === "TEXTAREA" ||
+					activeElement.getAttribute("contenteditable") === "true")
+			) {
+				return;
+			}
+
+			if (event.key === "Delete" || event.key === "Backspace") {
+				event.preventDefault();
+				onRemove({ event, ids: selectedIds });
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => {
+			window.removeEventListener("keydown", handleKeyDown);
+		};
+	}, [selectedIds, activeProject, onRemove]);
+
+	return null;
 }
 
 function MediaScopeRegistrar() {

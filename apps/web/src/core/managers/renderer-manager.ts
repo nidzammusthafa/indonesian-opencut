@@ -1,6 +1,8 @@
 import type { EditorCore } from "@/core";
 import type { RootNode } from "@/services/renderer/nodes/root-node";
 import type { ExportOptions, ExportResult } from "@/export";
+import { getExportFileExtension } from "@/export";
+import { useExportStore } from "@/export/export-store";
 import { CanvasRenderer } from "@/services/renderer/canvas-renderer";
 import { SceneExporter } from "@/services/renderer/scene-exporter";
 import { buildScene } from "@/services/renderer/scene-builder";
@@ -184,52 +186,31 @@ export class RendererManager {
 				background: activeProject.settings.background,
 			});
 
-			const exporter = new SceneExporter({
+			const renderer = new CanvasRenderer({
+				width: canvasSize.width,
+				height: canvasSize.height,
+				fps: exportFps,
+			});
+
+			const filename = `${activeProject.metadata.name}${getExportFileExtension({ format })}`;
+
+			const result = await useExportStore.getState().startExport({
 				width: canvasSize.width,
 				height: canvasSize.height,
 				fps: exportFps,
 				format,
 				quality,
-				shouldIncludeAudio: !!includeAudio,
-				audioBuffer: audioBuffer || undefined,
+				includeAudio: !!includeAudio,
+				audioBuffer,
+				duration,
+				renderFrame: async (timeTicks) => {
+					await renderer.render({ node: scene, time: timeTicks });
+				},
+				getCompositorCanvas: () => renderer.getOutputCanvas(),
+				filename,
 			});
 
-			exporter.on("progress", (progress) => {
-				const adjustedProgress = includeAudio
-					? 0.05 + progress * 0.95
-					: progress;
-				onProgress?.({ progress: adjustedProgress });
-			});
-
-			let cancelled = false;
-			const checkCancel = () => {
-				if (onCancel?.()) {
-					cancelled = true;
-					exporter.cancel();
-				}
-			};
-
-			const cancelInterval = setInterval(checkCancel, 100);
-
-			try {
-				const buffer = await exporter.export({ rootNode: scene });
-				clearInterval(cancelInterval);
-
-				if (cancelled) {
-					return { success: false, cancelled: true };
-				}
-
-				if (!buffer) {
-					return { success: false, error: "Export failed to produce buffer" };
-				}
-
-				return {
-					success: true,
-					buffer,
-				};
-			} finally {
-				clearInterval(cancelInterval);
-			}
+			return result;
 		} catch (error) {
 			console.error("Export failed:", error);
 			return {

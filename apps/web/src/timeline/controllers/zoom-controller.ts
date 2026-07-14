@@ -49,6 +49,8 @@ export class ZoomController {
 	private isInPlayheadAnchorMode = false;
 	private scrollSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 
+	private userHasManuallyZoomed = false;
+
 	constructor(deps: { configRef: ZoomConfigRef; initialZoom?: number }) {
 		this.configRef = deps.configRef;
 
@@ -73,6 +75,10 @@ export class ZoomController {
 		return this.zoomLevelValue;
 	}
 
+	get isManuallyZoomed(): boolean {
+		return this.userHasManuallyZoomed;
+	}
+
 	subscribe(fn: () => void): () => void {
 		this.subscribers.add(fn);
 		return () => this.subscribers.delete(fn);
@@ -85,7 +91,11 @@ export class ZoomController {
 		}
 	}
 
-	setZoomLevel(zoomLevelOrUpdater: ZoomUpdater): void {
+	setZoomLevel(zoomLevelOrUpdater: ZoomUpdater, options?: { userInitiated?: boolean }): void {
+		if (options?.userInitiated) {
+			this.userHasManuallyZoomed = true;
+		}
+
 		const scrollElement = this.config.getTracksScrollEl();
 		if (scrollElement) {
 			this.preZoomScrollLeft = scrollElement.scrollLeft;
@@ -120,7 +130,7 @@ export class ZoomController {
 			const cappedDelta =
 				Math.sign(normalizedDelta) * Math.min(Math.abs(normalizedDelta), 30);
 			const zoomFactor = Math.exp(-cappedDelta / 300);
-			this.setZoomLevel((prev) => prev * zoomFactor);
+			this.setZoomLevel((prev) => prev * zoomFactor, { userInitiated: true });
 		}
 	}
 

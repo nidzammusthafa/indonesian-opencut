@@ -27,7 +27,11 @@ interface UseTimelineZoomProps {
 
 interface UseTimelineZoomReturn {
 	zoomLevel: number;
-	setZoomLevel: (zoomLevel: number | ((prev: number) => number)) => void;
+	isManuallyZoomed: boolean;
+	setZoomLevel: (
+		zoomLevel: number | ((prev: number) => number),
+		options?: { userInitiated?: boolean },
+	) => void;
 	handleWheel: (event: ReactWheelEvent) => void;
 	saveScrollPosition: () => void;
 }
@@ -89,6 +93,7 @@ export function useTimelineZoom({
 
 	return {
 		zoomLevel,
+		isManuallyZoomed: controller.isManuallyZoomed,
 		setZoomLevel: controller.setZoomLevel,
 		handleWheel: controller.handleWheel,
 		saveScrollPosition: controller.saveScrollPosition,

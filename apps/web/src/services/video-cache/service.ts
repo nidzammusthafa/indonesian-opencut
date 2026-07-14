@@ -239,11 +239,26 @@ export class VideoCache {
 		mediaId: string;
 		file: File;
 	}): Promise<void> {
-		if (this.sinks.has(mediaId)) return;
+		if (this.sinks.has(mediaId)) {
+			const sinkData = this.sinks.get(mediaId)!;
+			this.sinks.delete(mediaId);
+			this.sinks.set(mediaId, sinkData);
+			return;
+		}
 
 		if (this.initPromises.has(mediaId)) {
 			await this.initPromises.get(mediaId);
 			return;
+		}
+
+		// Limit the maximum number of active WebCodecs video decoders to 4
+		// to prevent hardware/browser resource limit exhaustion crashes.
+		if (this.sinks.size >= 4) {
+			const oldestMediaId = this.sinks.keys().next().value;
+			if (oldestMediaId) {
+				console.log(`Disposing oldest video sink (${oldestMediaId}) to release hardware decoder`);
+				this.clearVideo({ mediaId: oldestMediaId });
+			}
 		}
 
 		const initPromise = this.initializeSink({ mediaId, file });
