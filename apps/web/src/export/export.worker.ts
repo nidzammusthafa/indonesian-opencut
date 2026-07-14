@@ -12,6 +12,44 @@ import {
 } from "mediabunny";
 import type { ExportFormat, ExportQuality } from "@/export";
 
+// Polyfill AudioBuffer for the Web Worker context since Web Workers do not have native AudioBuffer
+if (typeof globalThis.AudioBuffer === "undefined") {
+	class AudioBufferPolyfill {
+		sampleRate: number;
+		numberOfChannels: number;
+		length: number;
+		duration: number;
+		private _channels: Float32Array[];
+
+		constructor(options: { length: number; numberOfChannels: number; sampleRate: number }) {
+			this.length = options.length;
+			this.numberOfChannels = options.numberOfChannels;
+			this.sampleRate = options.sampleRate;
+			this.duration = options.length / options.sampleRate;
+			this._channels = Array.from({ length: options.numberOfChannels }, () => new Float32Array(options.length));
+		}
+
+		getChannelData(channel: number): Float32Array {
+			if (channel < 0 || channel >= this.numberOfChannels) {
+				throw new DOMException("IndexSizeError");
+			}
+			return this._channels[channel];
+		}
+
+		copyFromChannel(destination: Float32Array, channelNumber: number, bufferOffset = 0): void {
+			const channelData = this.getChannelData(channelNumber);
+			destination.set(channelData.subarray(bufferOffset, bufferOffset + destination.length));
+		}
+
+		copyToChannel(source: Float32Array, channelNumber: number, bufferOffset = 0): void {
+			const channelData = this.getChannelData(channelNumber);
+			channelData.set(source, bufferOffset);
+		}
+	}
+
+	(globalThis as any).AudioBuffer = AudioBufferPolyfill;
+}
+
 const qualityMap = {
 	low: QUALITY_LOW,
 	medium: QUALITY_MEDIUM,
